@@ -1,0 +1,334 @@
+package com.example.xiaomimqtt
+
+import android.annotation.SuppressLint
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothStatusCodes
+import android.bluetooth.le.BluetoothLeScanner
+import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanResult
+import android.bluetooth.le.ScanSettings
+import android.content.Context
+import android.os.ParcelUuid
+import android.util.Log
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import java.util.UUID
+import android.bluetooth.le.ScanFilter
+import android.bluetooth.BluetoothGatt
+import android.bluetooth.BluetoothGattCallback
+import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothGattDescriptor
+import android.bluetooth.BluetoothProfile
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.app.ActivityCompat
+import android.Manifest
+import kotlinx.coroutines.Dispatchers
+
+class BluetoothSensorManager(private val context: Context) {
+
+    private val bluetoothManager: BluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+    private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager.adapter
+    private val scanner: BluetoothLeScanner?
+        get() = bluetoothAdapter?.bluetoothLeScanner
+    
+    private val instanceId = System.identityHashCode(this)
+
+    private val _sensorDataFlow = MutableStateFlow<SensorData?>(null)
+    val sensorDataFlow: StateFlow<SensorData?> = _sensorDataFlow.asStateFlow()
+
+    private val _isScanning = MutableStateFlow(false)
+    val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
+
+    // Raw Scan Flow
+    private val _rawScanFlow = MutableStateFlow<ScanResult?>(null)
+    val rawScanFlow: StateFlow<ScanResult?> = _rawScanFlow.asStateFlow()
+    private var rawScanCallback: ScanCallback? = null
+
+
+    private val scanCallback = object : ScanCallback() {
+        @SuppressLint("MissingPermission")
+        override fun onScanResult(callbackType: Int, result: ScanResult) {
+            val device = result.device
+            val scanRecord = result.scanRecord ?: return
+            
+            val serviceData = scanRecord.serviceData.mapKeys { it.key.uuid.toString() }
+            val data = SensorParser.parse(device.name ?: "", device.address, serviceData)
+            
+            if (data != null) {
+                _sensorDataFlow.value = data
+                Log.d("BluetoothSensorManager", "Parsed: $data")
+            }
+        }
+
+        override fun onScanFailed(errorCode: Int) {
+            Log.e("BluetoothSensorManager", "Scan failed: $errorCode")
+            AppLogger.log("BLE", "Scan Failed: $errorCode")
+            _isScanning.value = false
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun startScanning(targetMac: String? = null) {
+        val scanner = this.scanner ?: run {
+            AppLogger.log("BLE", "Scanner not available")
+            return
+        }
+        
+        if (_isScanning.value) return
+
+        val filters = mutableListOf<ScanFilter>()
+        if (!targetMac.isNullOrEmpty() && BluetoothAdapter.checkBluetoothAddress(targetMac)) {
+            filters.add(ScanFilter.Builder().setDeviceAddress(targetMac).build())
+        } else {
+            listOf("fe95", "fcd2", "181a").forEach { uuid ->
+                val parcelUuid = ParcelUuid.fromString("0000$uuid-0000-1000-8000-00805f9b34fb")
+                filters.add(ScanFilter.Builder().setServiceUuid(parcelUuid).build())
+            }
+        }
+
+        val settings = ScanSettings.Builder()
+            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .build()
+        
+        try {
+            scanner.startScan(filters, settings, scanCallback)
+            _isScanning.value = true
+            AppLogger.log("BLE", "Scanner STARTED")
+        } catch (e: Exception) {
+            AppLogger.log("BLE", "Start Scan Failed: ${e.message}")
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun stopScanning() {
+        try {
+            scanner?.stopScan(scanCallback)
+            AppLogger.log("BLE", "Scanner STOPPED")
+        } catch (e: Exception) {
+            AppLogger.log("BLE", "Stop Scan Error: ${e.message}")
+        }
+        _isScanning.value = false
+    }
+
+    @SuppressLint("MissingPermission")
+    fun startRawScan() {
+        val scanner = this.scanner ?: return
+        
+        if (rawScanCallback != null) return
+
+        rawScanCallback = object : ScanCallback() {
+            override fun onScanResult(callbackType: Int, result: ScanResult) {
+                _rawScanFlow.value = result
+            }
+        }
+
+        val settings = ScanSettings.Builder()
+            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
+            .build()
+            
+        try {
+            scanner.startScan(null, settings, rawScanCallback)
+            AppLogger.log("BLE", "Raw Scanner STARTED")
+        } catch (e: Exception) {
+            AppLogger.log("BLE", "Raw Scan Start Failed: ${e.message}")
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun stopRawScan() {
+        val scanner = this.scanner ?: return
+        rawScanCallback?.let {
+            try {
+                scanner.stopScan(it)
+                AppLogger.log("BLE", "Raw Scanner STOPPED")
+            } catch (e: Exception) {
+                AppLogger.log("BLE", "Raw Scan Stop Error: ${e.message}")
+            }
+        }
+        rawScanCallback = null
+    }
+
+
+    @SuppressLint("MissingPermission")
+    suspend fun downloadHistory(deviceAddress: String, records: Int = 70, onLog: (String) -> Unit = {}): List<SensorData> = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        val historyList = mutableListOf<SensorData>()
+        val device = bluetoothAdapter?.getRemoteDevice(deviceAddress) ?: return@withContext emptyList()
+        
+        var gatt: BluetoothGatt? = null
+        val completion = kotlinx.coroutines.CompletableDeferred<Boolean>()
+        
+        val gattCallback = object : BluetoothGattCallback() {
+            private var writeStep = 0
+
+            override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
+                if (newState == BluetoothProfile.STATE_CONNECTED) {
+                    g.discoverServices()
+                } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                    completion.complete(true)
+                }
+            }
+
+            override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    val service = g.getService(UUID.fromString("00001f10-0000-1000-8000-00805f9b34fb"))
+                    val char = service?.getCharacteristic(UUID.fromString("00001f1f-0000-1000-8000-00805f9b34fb"))
+                    if (char != null) {
+                        g.setCharacteristicNotification(char, true)
+                        val desc = char.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"))
+                        desc.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                        g.writeDescriptor(desc)
+                    } else {
+                        g.disconnect()
+                    }
+                } else {
+                    g.disconnect()
+                }
+            }
+             
+            override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor?, status: Int) {
+                val char = g.getService(UUID.fromString("00001f10-0000-1000-8000-00805f9b34fb"))
+                    ?.getCharacteristic(UUID.fromString("00001f1f-0000-1000-8000-00805f9b34fb")) ?: return
+                
+                val currentTime = (System.currentTimeMillis() / 1000).toInt()
+                val timeCmd = ByteArray(5).apply {
+                    this[0] = 0x23.toByte()
+                    System.arraycopy(java.nio.ByteBuffer.allocate(4).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(currentTime).array(), 0, this, 1, 4)
+                }
+                writeStep = 1
+                writeCharacteristic(g, char, timeCmd)
+             }
+
+            override fun onCharacteristicWrite(g: BluetoothGatt, char: BluetoothGattCharacteristic?, status: Int) {
+                if (status == BluetoothGatt.GATT_SUCCESS && writeStep == 1) {
+                     val cmd = ByteArray(5).apply {
+                        this[0] = 0x35.toByte()
+                        this[1] = (records and 0xFF).toByte()
+                        this[2] = ((records shr 8) and 0xFF).toByte()
+                     }
+                     writeStep = 2
+                     writeCharacteristic(g, char!!, cmd)
+                }
+            }
+
+            override fun onCharacteristicChanged(g: BluetoothGatt, char: BluetoothGattCharacteristic, value: ByteArray) {
+                if (value.size == 3 && value[0] == 0x35.toByte() && value[1] == 0.toByte() && value[2] == 0.toByte()) {
+                    g.disconnect()
+                    return
+                }
+
+                if (value.size >= 13 && value[0] == 0x35.toByte()) {
+                    val buffer = java.nio.ByteBuffer.wrap(value).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                    val time = (buffer.getInt(3).toLong() and 0xFFFFFFFFL) * 1000L
+                    val temp = buffer.getShort(7) / 100.0
+                    val hum = buffer.getShort(9) / 100.0
+                    val vbat = buffer.getShort(11)
+                    val batPct = ((vbat - 2100).coerceIn(0, 1000) / 10.0).toInt()
+
+                    historyList.add(SensorData(
+                        macAddress = g.device.address,
+                        deviceName = g.device.name ?: "",
+                        temperature = Math.round(temp * 100) / 100.0,
+                        humidity = Math.round(hum * 100) / 100.0,
+                        battery = batPct,
+                        timestamp = time
+                    ))
+                }
+            }
+        }
+
+        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+             gatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                 device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+             } else {
+                 device.connectGatt(context, false, gattCallback)
+             }
+        } else return@withContext emptyList()
+        
+        try {
+            kotlinx.coroutines.withTimeout(60000) { completion.await() }
+        } catch (e: Exception) {
+            Log.e("BluetoothSensorManager", "Download timeout", e)
+        } finally {
+             gatt?.disconnect()
+             gatt?.close()
+        }
+        
+        return@withContext fixTimestamps(historyList)
+    }
+
+    private fun fixTimestamps(history: List<SensorData>): List<SensorData> {
+        if (history.isEmpty()) return history
+        val now = System.currentTimeMillis()
+        val wrongRecords = history.filter { it.timestamp < 1577836800000L }.sortedBy { it.timestamp }
+        if (wrongRecords.isEmpty()) return history
+
+        val offset = now - wrongRecords.last().timestamp
+        return history.map { 
+            if (it.timestamp < 1577836800000L) it.copy(timestamp = it.timestamp + offset) else it
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun writeCharacteristic(g: BluetoothGatt, char: BluetoothGattCharacteristic, value: ByteArray) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            g.writeCharacteristic(char, value, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+        } else {
+            char.value = value
+            char.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            g.writeCharacteristic(char)
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    suspend fun syncTime(deviceAddress: String, onLog: (String) -> Unit = {}): Boolean = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        val device = bluetoothAdapter?.getRemoteDevice(deviceAddress) ?: return@withContext false
+        val completion = kotlinx.coroutines.CompletableDeferred<Boolean>()
+        
+        val gattCallback = object : BluetoothGattCallback() {
+            override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
+                if (newState == BluetoothProfile.STATE_CONNECTED) g.discoverServices()
+                else if (newState == BluetoothProfile.STATE_DISCONNECTED && !completion.isCompleted) completion.complete(false)
+            }
+
+            override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    val service = g.getService(UUID.fromString("00001f10-0000-1000-8000-00805f9b34fb"))
+                    val char = service?.getCharacteristic(UUID.fromString("00001f1f-0000-1000-8000-00805f9b34fb"))
+                    if (char != null) {
+                        val currentTime = (System.currentTimeMillis() / 1000).toInt()
+                        val timeCmd = ByteArray(5).apply {
+                            this[0] = 0x23.toByte()
+                            System.arraycopy(java.nio.ByteBuffer.allocate(4).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(currentTime).array(), 0, this, 1, 4)
+                        }
+                        writeCharacteristic(g, char, timeCmd)
+                    } else completion.complete(false)
+                } else completion.complete(false)
+            }
+            
+            override fun onCharacteristicWrite(g: BluetoothGatt, char: BluetoothGattCharacteristic?, status: Int) {
+                 completion.complete(status == BluetoothGatt.GATT_SUCCESS)
+                 g.disconnect()
+            }
+        }
+
+        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) return@withContext false
+        
+        val gatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+        } else device.connectGatt(context, false, gattCallback)
+        
+        try {
+            kotlinx.coroutines.withTimeout(15000) { completion.await() }
+        } catch (e: Exception) {
+            false
+        } finally {
+            gatt.disconnect()
+            gatt.close()
+        }
+    }
+}
