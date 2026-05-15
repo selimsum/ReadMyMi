@@ -1,0 +1,22 @@
+﻿# Built-in ignores
+/build/
+/.gradle/
+/local.properties
+/.idea/caches/
+/.idea/libraries/
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+/.idea/modules/
+*.iml
+*.class
+bin/
+gen/
+
+# Keep inspection profiles if they are shared
+!/.idea/inspectionProfiles/
+
+# Log files
+*.log
+
