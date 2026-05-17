@@ -7,8 +7,14 @@ object AppLogger {
     private val _logs = MutableStateFlow<List<String>>(emptyList())
     val logs = _logs.asStateFlow()
 
+    private val dateFormat = object : ThreadLocal<java.text.SimpleDateFormat>() {
+        override fun initialValue(): java.text.SimpleDateFormat {
+            return java.text.SimpleDateFormat("HH:mm:ss")
+        }
+    }
+
     fun log(tag: String, message: String) {
-        val entry = "[${java.text.SimpleDateFormat("HH:mm:ss").format(java.util.Date())}] $tag: $message"
+        val entry = "[${dateFormat.get()?.format(java.util.Date())}] $tag: $message"
         // Keep last 500 logs
         _logs.value = (listOf(entry) + _logs.value).take(500)
     }
