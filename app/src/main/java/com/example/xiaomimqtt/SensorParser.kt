@@ -1,6 +1,8 @@
 package com.example.xiaomimqtt
 
 import android.util.Log
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 object SensorParser {
     
@@ -94,17 +96,11 @@ object SensorParser {
     }
 
     private fun readInt16LE(data: ByteArray, offset: Int): Int {
-        val low = data[offset].toUByte().toInt()
-        val high = data[offset + 1].toUByte().toInt()
-        var raw = (high shl 8) or low
-        if (raw > 32767) raw -= 65536
-        return raw
+        return ByteBuffer.wrap(data, offset, 2).order(ByteOrder.LITTLE_ENDIAN).short.toInt()
     }
 
     private fun readUInt16LE(data: ByteArray, offset: Int): Int {
-        val low = data[offset].toUByte().toInt()
-        val high = data[offset + 1].toUByte().toInt()
-        return (high shl 8) or low
+        return ByteBuffer.wrap(data, offset, 2).order(ByteOrder.LITTLE_ENDIAN).short.toInt() and 0xFFFF
     }
 
     private fun createSensorData(mac: String, name: String, temp: Double, hum: Double, batt: Int): SensorData? {
