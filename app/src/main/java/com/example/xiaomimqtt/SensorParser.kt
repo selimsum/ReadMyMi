@@ -3,6 +3,12 @@ package com.example.xiaomimqtt
 import android.util.Log
 
 object SensorParser {
+
+    private const val MIN_TEMP = -40.0
+    private const val MAX_TEMP = 80.0
+    private const val MIN_HUM = 0.0
+    private const val MAX_HUM = 100.0
+    private const val ROUNDING_MULTIPLIER = 100.0
     
     fun parse(deviceName: String, macAddress: String, serviceData: Map<String, ByteArray>): SensorData? {
         serviceData.forEach { (uuid, data) ->
@@ -108,14 +114,14 @@ object SensorParser {
     }
 
     private fun createSensorData(mac: String, name: String, temp: Double, hum: Double, batt: Int): SensorData? {
-        if (temp < -40 || temp > 80 || hum < 0 || hum > 100) return null
+        if (temp < MIN_TEMP || temp > MAX_TEMP || hum < MIN_HUM || hum > MAX_HUM) return null
         if (temp == 0.0 && hum == 0.0) return null
         
         return SensorData(
             macAddress = mac,
             deviceName = name,
-            temperature = Math.round(temp * 100) / 100.0,
-            humidity = Math.round(hum * 100) / 100.0,
+            temperature = Math.round(temp * ROUNDING_MULTIPLIER) / ROUNDING_MULTIPLIER,
+            humidity = Math.round(hum * ROUNDING_MULTIPLIER) / ROUNDING_MULTIPLIER,
             battery = batt
         )
     }
