@@ -14,6 +14,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import android.widget.Toast
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
@@ -26,6 +27,8 @@ class SensorForegroundService : Service() {
 
     // Flag moved to companion
     companion object {
+        private const val NOTIFICATION_ID = 1
+        private const val CHANNEL_ID = "XiaomiMqttServiceChannel"
         var isServiceRunning = false
         val liveSensorData = kotlinx.coroutines.flow.MutableStateFlow<SensorData?>(null)
         val serviceStatus = kotlinx.coroutines.flow.MutableStateFlow("Initializing...")
@@ -42,8 +45,14 @@ class SensorForegroundService : Service() {
     private lateinit var prefs: PrefsManager
     private val lastDbSaveMap = mutableMapOf<String, Long>() // Throttle DB saves
 
+    private val latestReadings = mutableMapOf<String, SensorData>()
+    private val historyCheckedMap = mutableMapOf<String, Boolean>()
     
     // Flag to control service loop (Accessed via Companion for UI)
+
+    override fun onBind(intent: Intent?): IBinder? {
+        return null
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -80,6 +89,39 @@ class SensorForegroundService : Service() {
 
     }
     
+    private fun startForegroundService() {
+        createNotificationChannel()
+        val notificationIntent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Xiaomi MQTT Scanner")
+            .setContentText("Initializing...")
+            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth) // Fallback icon
+            .setContentIntent(pendingIntent)
+            .build()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val serviceChannel = NotificationChannel(
+                CHANNEL_ID,
+                "Xiaomi MQTT Scanner Service Channel",
+                NotificationManager.IMPORTANCE_LOW
+            )
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(serviceChannel)
+        }
+    }
+
     private suspend fun runServiceLoop() {
         while (isServiceRunning) {
             val scanStartTime = System.currentTimeMillis()
@@ -91,6 +133,10 @@ class SensorForegroundService : Service() {
             
             runSleepLoop()
         }
+    }
+
+    private fun checkAlerts(prefs: PrefsManager) {
+        // Implement alerts logic or leave empty if not fully implemented yet
     }
 
     private suspend fun performScan() {
@@ -225,6 +271,24 @@ class SensorForegroundService : Service() {
         val humStr = String.format(java.util.Locale.GERMANY, "%.1f", it.humidity)
         val devName = prefs.getDeviceName(it.macAddress)
         updateNotification(devName, "🌡️ $tempStr°C   💧 $humStr%")
+    }
+
+    private fun updateNotification(title: String, text: String) {
+        val notificationIntent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth) // Fallback icon
+            .setContentIntent(pendingIntent)
+            .setSilent(true) // Don't beep on every update
+            .build()
+
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.notify(NOTIFICATION_ID, notification)
     }
 
     private fun throttleSaveToDb(it: SensorData) {

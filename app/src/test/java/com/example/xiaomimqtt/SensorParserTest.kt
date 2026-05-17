@@ -123,7 +123,10 @@ class SensorParserTest {
         payload[16] = 0x0A.toByte()
         val serviceData = mapOf("fe95" to payload)
 
-        val result = SensorParser.parse("ATC_Test", "00:11:22:33:44:55", serviceData) // Name must have ATC or size 15 works
+        // The deviceName "ATC_Test" triggers parseATC logic in SensorParser.parse()
+        // which has a completely different payload format expectation than parseXiaomi.
+        // We use "Xiaomi_Test" to fall through to parseXiaomi because it contains "fe95" service data.
+        val result = SensorParser.parse("Xiaomi_Test", "00:11:22:33:44:55", serviceData)
 
         assertEquals(25.0, result?.temperature)
         assertEquals(50.0, result?.humidity)

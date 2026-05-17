@@ -76,6 +76,18 @@ import com.example.xiaomimqtt.ui.theme.XiaomiMqttAppTheme
 import com.example.xiaomimqtt.ui.HistoryScreen
 import com.example.xiaomimqtt.ui.SensorChart
 import com.example.xiaomimqtt.data.SensorDatabase
+import androidx.activity.viewModels
+import androidx.core.content.ContextCompat
+import android.content.pm.PackageManager
+import android.bluetooth.BluetoothAdapter
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Box
+import com.example.xiaomimqtt.ui.DebugScreen
+import com.example.xiaomimqtt.ui.AboutScreen
+import com.example.xiaomimqtt.ui.SettingsScreen
+import com.example.xiaomimqtt.ui.DashboardScreen
+import com.example.xiaomimqtt.data.SensorEntity
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -177,14 +189,21 @@ fun MainScreen(viewModel: MainViewModel) {
                     isServiceRunning = isRunning,
                     isDownloading = isDownloading,
                     onRefresh = { viewModel.restartService() },
-                    onDownloadHistory = { records ->
+                    onDownloadHistory = { records: Int ->
                         isDownloading = true
                         lifecycleOwner.lifecycleScope.launch {
                             val manager = BluetoothSensorManager(context)
                             val history = manager.downloadHistory(sensorData?.macAddress ?: "", records)
                             if (history.isNotEmpty()) {
                                 database.sensorDao().insertAll(history.map { 
-                                    SensorEntity(it.macAddress, it.temperature.toFloat(), it.humidity.toInt(), it.battery, it.timestamp)
+                                    SensorEntity(
+                                        id = 0,
+                                        macAddress = it.macAddress,
+                                        temperature = it.temperature.toFloat(),
+                                        humidity = it.humidity.toInt(),
+                                        battery = it.battery,
+                                        timestamp = it.timestamp
+                                    )
                                 })
                             }
                             isDownloading = false
@@ -194,5 +213,4 @@ fun MainScreen(viewModel: MainViewModel) {
             }
         }
     }
-}
 }
