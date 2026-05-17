@@ -31,3 +31,4 @@ obj/
 # OS files
 .DS_Store
 Thumbs.db
+app/build/

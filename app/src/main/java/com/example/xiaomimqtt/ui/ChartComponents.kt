@@ -117,8 +117,10 @@ fun SensorChart(
             
             if (sampledData.isNotEmpty()) {
                 val step = (sampledData.size / 5).coerceAtLeast(1)
+                val sharedDate = Date()
                 for (i in sampledData.indices step step) {
-                    axisXValues.add(AxisValue(i.toFloat()).setLabel(dateFormat.format(Date(sampledData[i].timestamp))))
+                    sharedDate.time = sampledData[i].timestamp
+                    axisXValues.add(AxisValue(i.toFloat()).setLabel(dateFormat.format(sharedDate)))
                 }
             }
 
