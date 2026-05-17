@@ -202,16 +202,21 @@ class SensorForegroundService : Service() {
     private fun saveHistoryToDb(history: List<SensorData>) {
         if (history.isEmpty()) return
         AppLogger.log("Service", "Saving ${history.size} history records...")
-        history.forEach { record ->
+        serviceScope.launch(Dispatchers.IO) {
             try {
-                database.sensorDao().insert(SensorEntity(
-                    macAddress = record.macAddress,
-                    temperature = record.temperature.toFloat(),
-                    humidity = record.humidity.toInt(),
-                    battery = record.battery,
-                    timestamp = record.timestamp
-                ))
-            } catch (e: Exception) { /* ignore */ }
+                val entities = history.map { record ->
+                    SensorEntity(
+                        macAddress = record.macAddress,
+                        temperature = record.temperature.toFloat(),
+                        humidity = record.humidity.toInt(),
+                        battery = record.battery,
+                        timestamp = record.timestamp
+                    )
+                }
+                database.sensorDao().insertAll(entities)
+            } catch (e: Exception) {
+                AppLogger.log("Service", "Failed to save history: ${e.message}")
+            }
         }
     }
 
