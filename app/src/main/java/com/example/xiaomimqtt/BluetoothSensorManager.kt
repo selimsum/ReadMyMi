@@ -227,7 +227,7 @@ class BluetoothSensorManager(private val context: Context) {
                     val temp = buffer.getShort(7) / 100.0
                     val hum = buffer.getShort(9) / 100.0
                     val vbat = buffer.getShort(11)
-                    val batPct = ((vbat - 2100).coerceIn(0, 1000) / 10.0).toInt()
+                    val batPct = SensorParser.calculateBatteryPercentage(vbat.toInt())
 
                     historyList.add(SensorData(
                         macAddress = g.device.address,

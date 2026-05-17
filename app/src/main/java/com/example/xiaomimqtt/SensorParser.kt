@@ -4,6 +4,12 @@ import android.util.Log
 
 object SensorParser {
     
+    private const val MIN_VOLTAGE_MV = 2100
+
+    fun calculateBatteryPercentage(voltageMv: Int): Int {
+        return ((voltageMv - MIN_VOLTAGE_MV).coerceIn(0, 1000) / 10.0).toInt()
+    }
+
     fun parse(deviceName: String, macAddress: String, serviceData: Map<String, ByteArray>): SensorData? {
         serviceData.forEach { (uuid, data) ->
             val uuidString = uuid.lowercase()
@@ -53,7 +59,7 @@ object SensorParser {
                 0x0C -> { // Voltage (uint16, 0.001V)
                     if (i + 1 < data.size && batt == 0) {
                         val vRaw = readUInt16LE(data, i)
-                        batt = ((vRaw - 2100) / 10).coerceIn(0, 100)
+                        batt = calculateBatteryPercentage(vRaw)
                     }
                     i += 2
                 }
@@ -82,7 +88,7 @@ object SensorParser {
             val hum = readUInt16LE(data, 13) / 10.0
             val batt = if (data.size >= 17) {
                 val vbat = readUInt16LE(data, 15)
-                ((vbat - 2100).coerceIn(0, 1000) / 10.0).toInt()
+                calculateBatteryPercentage(vbat)
             } else 0
             createSensorData(mac, name, temp, hum, batt)
         } else if (data.size >= 13) {
