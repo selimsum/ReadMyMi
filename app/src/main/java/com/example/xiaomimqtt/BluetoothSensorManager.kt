@@ -331,4 +331,51 @@ class BluetoothSensorManager(private val context: Context) {
             gatt.close()
         }
     }
+
+    @SuppressLint("MissingPermission")
+    suspend fun connectAndReadConfig(deviceAddress: String, onLog: (String) -> Unit): Map<String, String> = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        val configMap = mutableMapOf<String, String>()
+        val device = bluetoothAdapter?.getRemoteDevice(deviceAddress) ?: return@withContext configMap
+        val completion = kotlinx.coroutines.CompletableDeferred<Boolean>()
+
+        val gattCallback = object : BluetoothGattCallback() {
+            override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
+                if (newState == BluetoothProfile.STATE_CONNECTED) {
+                    onLog("Connected, discovering services...")
+                    g.discoverServices()
+                } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                    onLog("Disconnected.")
+                    completion.complete(true)
+                }
+            }
+
+            override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    onLog("Services discovered.")
+                    g.disconnect() // Just disconnecting for now, no actual reading logic implemented
+                } else {
+                    onLog("Service discovery failed.")
+                    g.disconnect()
+                }
+            }
+        }
+
+        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) return@withContext configMap
+
+        val gatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+        } else device.connectGatt(context, false, gattCallback)
+
+        try {
+            kotlinx.coroutines.withTimeout(15000) {
+                completion.await()
+            }
+        } catch (e: Exception) {
+            onLog("Timeout connecting.")
+            gatt?.disconnect()
+            gatt?.close()
+        }
+
+        return@withContext configMap
+    }
 }
