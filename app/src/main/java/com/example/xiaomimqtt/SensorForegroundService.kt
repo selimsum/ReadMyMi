@@ -66,7 +66,7 @@ class SensorForegroundService : Service() {
             }
             stopSelf()
             return START_NOT_STICKY
-        } else if (intent?.action == "START_SCAN") {
+        } else if (intent?.action == "START_SCAN" || intent?.action == null) {
             if (!isServiceRunning) {
                 isServiceRunning = true
                 startForegroundService()
@@ -110,7 +110,7 @@ class SensorForegroundService : Service() {
 
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Xiaomi MQTT Scanner")
-            .setContentText("Initializing...")
+            .setContentText("Running...")
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth) // Fallback icon
             .setContentIntent(pendingIntent)
             .build()
@@ -154,6 +154,7 @@ class SensorForegroundService : Service() {
     private suspend fun performScan() {
         AppLogger.log("Service", "Starting Periodic Scan (15s)")
         serviceStatus.value = "Scanning (15s)..."
+        updateNotification("Xiaomi MQTT Scanner", "Scanning for sensors...")
         try {
             bluetoothSensorManager.startScanning(prefs.lastMac)
             kotlinx.coroutines.delay(15000)
@@ -327,6 +328,8 @@ class SensorForegroundService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         isServiceRunning = false
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.cancel(NOTIFICATION_ID)
         wakeLock?.release()
         serviceScope.cancel()
     }
