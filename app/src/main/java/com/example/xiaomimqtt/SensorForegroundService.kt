@@ -66,7 +66,7 @@ class SensorForegroundService : Service() {
             }
             stopSelf()
             return START_NOT_STICKY
-        } else if (intent?.action == "START_SCAN") {
+        } else if (intent?.action == "START_SCAN" || intent?.action == null) {
             if (!isServiceRunning) {
                 isServiceRunning = true
                 startForegroundService()
@@ -154,6 +154,7 @@ class SensorForegroundService : Service() {
     private suspend fun performScan() {
         AppLogger.log("Service", "Starting Periodic Scan (15s)")
         serviceStatus.value = "Scanning (15s)..."
+        updateNotification("Xiaomi MQTT Scanner", "Scanning for sensors...")
         try {
             bluetoothSensorManager.startScanning(prefs.lastMac)
             kotlinx.coroutines.delay(15000)
