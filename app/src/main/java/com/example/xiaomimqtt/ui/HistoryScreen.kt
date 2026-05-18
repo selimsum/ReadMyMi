@@ -56,19 +56,21 @@ fun HistoryScreen(
     }
 
     // Collect Data and aggregate into time buckets to eliminate zigzags and overlapping duplicates
-    val historyData by database.sensorDao().getHistory(macAddress, startTime, endTime)
-        .map { list ->
-            list.groupBy { it.timestamp / bucketSize }
-                .map { (_, group) ->
-                    group.first().copy(
-                        temperature = Math.round(group.map { it.temperature }.average() * 100) / 100f,
-                        humidity = group.map { it.humidity }.average().roundToInt(),
-                        timestamp = group.map { it.timestamp }.average().toLong()
-                    )
-                }
-                .sortedBy { it.timestamp }
-        }
-        .collectAsState(initial = emptyList())
+    val historyFlow = remember(macAddress, startTime, endTime, bucketSize) {
+        database.sensorDao().getHistory(macAddress, startTime, endTime)
+            .map { list ->
+                list.groupBy { it.timestamp / bucketSize }
+                    .map { (_, group) ->
+                        group.first().copy(
+                            temperature = Math.round(group.map { it.temperature }.average() * 100) / 100f,
+                            humidity = group.map { it.humidity }.average().roundToInt(),
+                            timestamp = group.map { it.timestamp }.average().toLong()
+                        )
+                    }
+                    .sortedBy { it.timestamp }
+            }
+    }
+    val historyData by historyFlow.collectAsState(initial = emptyList())
 
     Column(
         modifier = Modifier

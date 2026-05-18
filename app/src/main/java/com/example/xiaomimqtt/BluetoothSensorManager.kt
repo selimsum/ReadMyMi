@@ -81,7 +81,7 @@ class BluetoothSensorManager(private val context: Context) {
         if (_isScanning.value) return
 
         val filters = mutableListOf<ScanFilter>()
-        if (!targetMac.isNullOrEmpty() && BluetoothAdapter.checkBluetoothAddress(targetMac)) {
+        if (!targetMac.isNullOrEmpty() && try { BluetoothAdapter.checkBluetoothAddress(targetMac) } catch (e: IllegalArgumentException) { false }) {
             filters.add(ScanFilter.Builder().setDeviceAddress(targetMac).build())
         } else {
             listOf("fe95", "fcd2", "181a").forEach { uuid ->
