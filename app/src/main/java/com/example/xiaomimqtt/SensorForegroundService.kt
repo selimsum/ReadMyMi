@@ -54,38 +54,50 @@ class SensorForegroundService : Service() {
         return null
     }
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d("SensorService", "onStartCommand: action=${intent?.action}")
+        if (intent?.action == "STOP_SCAN") {
+            isServiceRunning = false
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
+            stopSelf()
+            return START_NOT_STICKY
+        } else if (intent?.action == "START_SCAN") {
+            if (!isServiceRunning) {
+                isServiceRunning = true
+                startForegroundService()
+                serviceScope.launch {
+                    runServiceLoop()
+                }
+                serviceScope.launch {
+                    bluetoothSensorManager.sensorDataFlow.collectLatest { data ->
+                        data?.let { handleSensorData(it) }
+                    }
+                }
+            }
+        }
+        return START_STICKY
+    }
+
     override fun onCreate() {
         super.onCreate()
         Log.d("SensorService", "Service Created")
         AppLogger.log("Service", "Service Created")
-        isServiceRunning = true
 
         // Acquire WakeLock for reliable background scanning
         val powerManager = getSystemService(PowerManager::class.java)
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "XiaomiMqtt::ScanWakeLock")
         wakeLock?.acquire() // Indefinite acquisition until onDestroy
 
-        startForegroundService()
-        
-
-        
-        
         database = SensorDatabase.getDatabase(this)
         prefs = PrefsManager(this)
         
         bluetoothSensorManager = BluetoothSensorManager(this)
 
-
-        serviceScope.launch {
-            runServiceLoop()
-        }
-        
-        serviceScope.launch {
-            bluetoothSensorManager.sensorDataFlow.collectLatest { data ->
-                data?.let { handleSensorData(it) }
-            }
-        }
-        
 
     }
     
@@ -98,7 +110,7 @@ class SensorForegroundService : Service() {
 
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Xiaomi MQTT Scanner")
-            .setContentText("Initializing...")
+            .setContentText("Running...")
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth) // Fallback icon
             .setContentIntent(pendingIntent)
             .build()
@@ -310,5 +322,14 @@ class SensorForegroundService : Service() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        isServiceRunning = false
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.cancel(NOTIFICATION_ID)
+        wakeLock?.release()
+        serviceScope.cancel()
     }
 }
