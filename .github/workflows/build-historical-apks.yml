@@ -1,0 +1,127 @@
+name: Build Historical APKs
+
+on:
+  push:
+    branches:
+      - '**'
+  workflow_dispatch:
+    inputs:
+      commit_range:
+        description: 'Git commit range (e.g. HEAD~5..HEAD or d232b67..HEAD). Leave blank to build all commits on the current branch.'
+        required: false
+        default: ''
+
+jobs:
+  build-apks:
+    name: Build APKs for Commits
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history so we can checkout past commits
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Determine Commits and Build APKs
+        run: |
+          mkdir -p build-apks
+          
+          # Determine the commits to build based on trigger event
+          if [ "${{ github.event_name }}" = "push" ]; then
+            BEFORE="${{ github.event.before }}"
+            AFTER="${{ github.event.after }}"
+            
+            # If before commit is empty or all zeros (e.g., new branch push)
+            if [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || [ -z "$BEFORE" ]; then
+              echo "New branch or tag push detected. Building only the head commit: $AFTER"
+              COMMITS="$AFTER"
+            else
+              echo "Push event detected. Analyzing commits between $BEFORE and $AFTER..."
+              COMMITS=$(git rev-list --reverse "$BEFORE..$AFTER")
+            fi
+          else
+            # Manual workflow dispatch
+            COMMIT_RANGE="${{ github.event.inputs.commit_range }}"
+            if [ -z "$COMMIT_RANGE" ]; then
+              echo "No commit range specified. Building all commits on current branch."
+              COMMITS=$(git rev-list --reverse HEAD)
+            else
+              echo "Manual trigger with commit range: $COMMIT_RANGE"
+              COMMITS=$(git rev-list --reverse "$COMMIT_RANGE")
+            fi
+          fi
+          
+          if [ -z "$COMMITS" ]; then
+            echo "No commits found to build."
+            exit 0
+          fi
+          
+          echo "The following commits will be processed:"
+          echo "$COMMITS"
+          echo "------------------------------------------------------------"
+          
+          index=0
+          for commit in $COMMITS; do
+            index=$((index+1))
+            padded_index=$(printf "%03d" $index)
+            
+            # Resolve short hash and message before checking out
+            commit_short=$(git rev-parse --short "$commit")
+            commit_msg=$(git log -1 --format=%s "$commit" | tr -dc 'a-zA-Z0-9_-' | cut -c1-30)
+            
+            echo "============================================================"
+            echo "Building Commit #$padded_index [$commit_short]: $commit_msg"
+            echo "============================================================"
+            
+            # Force checkout the commit
+            git checkout -f "$commit"
+            
+            # Validate if it's an Android Gradle project at this commit
+            if [ ! -f "gradlew" ] || [ ! -f "app/build.gradle" ]; then
+              echo "Skipping: gradle files are missing at this commit."
+              continue
+            fi
+            
+            # Make gradlew executable
+            chmod +x gradlew
+            
+            echo "Executing assembleDebug..."
+            # Run gradle with --no-daemon to avoid caching issues between builds
+            if ./gradlew assembleDebug --no-daemon; then
+              echo "Successfully built APK for commit $commit_short"
+              
+              # Find the generated APK
+              APK_PATH=$(find app/build/outputs/apk/ -name "*.apk" -type f | head -n 1)
+              
+              if [ -n "$APK_PATH" ] && [ -f "$APK_PATH" ]; then
+                dest_name="${padded_index}_${commit_short}_${commit_msg}.apk"
+                cp "$APK_PATH" "build-apks/$dest_name"
+                echo "Artifact copied to build-apks/$dest_name"
+              else
+                echo "Warning: Build succeeded but no APK file was found in build/outputs."
+              fi
+            else
+              echo "Error: Build failed for commit $commit_short"
+            fi
+            
+            # Clean workspace to prevent disk space issues on the runner
+            ./gradlew clean --no-daemon || true
+            git clean -fd -e build-apks/ || true
+          done
+          
+          # Restore repository state to original commit so runner cleanup works cleanly
+          git checkout -f "${{ github.sha }}"
+
+      - name: Upload Built APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: historical-apks
+          path: build-apks/
+          if-no-files-found: warn
