@@ -52,9 +52,19 @@ jobs:
             if [ -z "$COMMIT_RANGE" ]; then
               echo "No commit range specified. Building all commits on current branch."
               COMMITS=$(git rev-list --reverse HEAD)
-            else
+            elif [[ "$COMMIT_RANGE" == *..* ]]; then
               echo "Manual trigger with commit range: $COMMIT_RANGE"
               COMMITS=$(git rev-list --reverse "$COMMIT_RANGE")
+            else
+              # Resolve to a single commit/reference (e.g. hash or branch name)
+              RESOLVED_COMMIT=$(git rev-parse --verify "$COMMIT_RANGE" 2>/dev/null || true)
+              if [ -n "$RESOLVED_COMMIT" ]; then
+                echo "Manual trigger with single commit: $COMMIT_RANGE (resolved to $RESOLVED_COMMIT)"
+                COMMITS="$RESOLVED_COMMIT"
+              else
+                echo "Error: Could not resolve '$COMMIT_RANGE' as a git reference or range."
+                exit 1
+              fi
             fi
           fi
           
