@@ -1,9 +1,23 @@
 package com.example.xiaomimqtt
 
 import android.util.Log
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 object SensorParser {
+
+    private const val MIN_TEMP = -40.0
+    private const val MAX_TEMP = 80.0
+    private const val MIN_HUM = 0.0
+    private const val MAX_HUM = 100.0
+    private const val ROUNDING_MULTIPLIER = 100.0
     
+    private const val MIN_VOLTAGE_MV = 2100
+
+    fun calculateBatteryPercentage(voltageMv: Int): Int {
+        return ((voltageMv - MIN_VOLTAGE_MV).coerceIn(0, 1000) / 10.0).toInt()
+    }
+
     fun parse(deviceName: String, macAddress: String, serviceData: Map<String, ByteArray>): SensorData? {
         serviceData.forEach { (uuid, data) ->
             val uuidString = uuid.lowercase()
@@ -53,7 +67,7 @@ object SensorParser {
                 0x0C -> { // Voltage (uint16, 0.001V)
                     if (i + 1 < data.size && batt == 0) {
                         val vRaw = readUInt16LE(data, i)
-                        batt = ((vRaw - 2100) / 10).coerceIn(0, 100)
+                        batt = calculateBatteryPercentage(vRaw)
                     }
                     i += 2
                 }
@@ -82,7 +96,7 @@ object SensorParser {
             val hum = readUInt16LE(data, 13) / 10.0
             val batt = if (data.size >= 17) {
                 val vbat = readUInt16LE(data, 15)
-                ((vbat - 2100).coerceIn(0, 1000) / 10.0).toInt()
+                calculateBatteryPercentage(vbat)
             } else 0
             createSensorData(mac, name, temp, hum, batt)
         } else if (data.size >= 13) {
@@ -94,28 +108,22 @@ object SensorParser {
     }
 
     private fun readInt16LE(data: ByteArray, offset: Int): Int {
-        val low = data[offset].toUByte().toInt()
-        val high = data[offset + 1].toUByte().toInt()
-        var raw = (high shl 8) or low
-        if (raw > 32767) raw -= 65536
-        return raw
+        return ByteBuffer.wrap(data, offset, 2).order(ByteOrder.LITTLE_ENDIAN).short.toInt()
     }
 
     private fun readUInt16LE(data: ByteArray, offset: Int): Int {
-        val low = data[offset].toUByte().toInt()
-        val high = data[offset + 1].toUByte().toInt()
-        return (high shl 8) or low
+        return ByteBuffer.wrap(data, offset, 2).order(ByteOrder.LITTLE_ENDIAN).short.toInt() and 0xFFFF
     }
 
     private fun createSensorData(mac: String, name: String, temp: Double, hum: Double, batt: Int): SensorData? {
-        if (temp < -40 || temp > 80 || hum < 0 || hum > 100) return null
+        if (temp < MIN_TEMP || temp > MAX_TEMP || hum < MIN_HUM || hum > MAX_HUM) return null
         if (temp == 0.0 && hum == 0.0) return null
         
         return SensorData(
             macAddress = mac,
             deviceName = name,
-            temperature = Math.round(temp * 100) / 100.0,
-            humidity = Math.round(hum * 100) / 100.0,
+            temperature = Math.round(temp * ROUNDING_MULTIPLIER) / ROUNDING_MULTIPLIER,
+            humidity = Math.round(hum * ROUNDING_MULTIPLIER) / ROUNDING_MULTIPLIER,
             battery = batt
         )
     }

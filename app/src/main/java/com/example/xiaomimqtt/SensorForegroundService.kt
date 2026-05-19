@@ -14,6 +14,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import android.widget.Toast
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
@@ -26,6 +27,8 @@ class SensorForegroundService : Service() {
 
     // Flag moved to companion
     companion object {
+        private const val NOTIFICATION_ID = 1
+        private const val CHANNEL_ID = "XiaomiMqttServiceChannel"
         var isServiceRunning = false
         val liveSensorData = kotlinx.coroutines.flow.MutableStateFlow<SensorData?>(null)
         val serviceStatus = kotlinx.coroutines.flow.MutableStateFlow("Initializing...")
@@ -42,44 +45,95 @@ class SensorForegroundService : Service() {
     private lateinit var prefs: PrefsManager
     private val lastDbSaveMap = mutableMapOf<String, Long>() // Throttle DB saves
 
+    private val latestReadings = mutableMapOf<String, SensorData>()
+    private val historyCheckedMap = mutableMapOf<String, Boolean>()
     
     // Flag to control service loop (Accessed via Companion for UI)
+
+    override fun onBind(intent: Intent?): IBinder? {
+        return null
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d("SensorService", "onStartCommand: action=${intent?.action}")
+        if (intent?.action == "STOP_SCAN") {
+            isServiceRunning = false
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
+            stopSelf()
+            return START_NOT_STICKY
+        } else if (intent?.action == "START_SCAN" || intent?.action == null) {
+            if (!isServiceRunning) {
+                isServiceRunning = true
+                startForegroundService()
+                serviceScope.launch {
+                    runServiceLoop()
+                }
+                serviceScope.launch {
+                    bluetoothSensorManager.sensorDataFlow.collectLatest { data ->
+                        data?.let { handleSensorData(it) }
+                    }
+                }
+            }
+        }
+        return START_STICKY
+    }
 
     override fun onCreate() {
         super.onCreate()
         Log.d("SensorService", "Service Created")
         AppLogger.log("Service", "Service Created")
-        isServiceRunning = true
 
         // Acquire WakeLock for reliable background scanning
         val powerManager = getSystemService(PowerManager::class.java)
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "XiaomiMqtt::ScanWakeLock")
         wakeLock?.acquire() // Indefinite acquisition until onDestroy
 
-        startForegroundService()
-        
-
-        
-        
         database = SensorDatabase.getDatabase(this)
         prefs = PrefsManager(this)
         
         bluetoothSensorManager = BluetoothSensorManager(this)
 
 
-        serviceScope.launch {
-            runServiceLoop()
-        }
-        
-        serviceScope.launch {
-            bluetoothSensorManager.sensorDataFlow.collectLatest { data ->
-                data?.let { handleSensorData(it) }
-            }
-        }
-        
-
     }
     
+    private fun startForegroundService() {
+        createNotificationChannel()
+        val notificationIntent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Xiaomi MQTT Scanner")
+            .setContentText("Running...")
+            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth) // Fallback icon
+            .setContentIntent(pendingIntent)
+            .build()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val serviceChannel = NotificationChannel(
+                CHANNEL_ID,
+                "Xiaomi MQTT Scanner Service Channel",
+                NotificationManager.IMPORTANCE_LOW
+            )
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(serviceChannel)
+        }
+    }
+
     private suspend fun runServiceLoop() {
         while (isServiceRunning) {
             val scanStartTime = System.currentTimeMillis()
@@ -93,9 +147,14 @@ class SensorForegroundService : Service() {
         }
     }
 
+    private fun checkAlerts(prefs: PrefsManager) {
+        // Implement alerts logic or leave empty if not fully implemented yet
+    }
+
     private suspend fun performScan() {
         AppLogger.log("Service", "Starting Periodic Scan (15s)")
         serviceStatus.value = "Scanning (15s)..."
+        updateNotification("Xiaomi MQTT Scanner", "Scanning for sensors...")
         try {
             bluetoothSensorManager.startScanning(prefs.lastMac)
             kotlinx.coroutines.delay(15000)
@@ -202,16 +261,21 @@ class SensorForegroundService : Service() {
     private fun saveHistoryToDb(history: List<SensorData>) {
         if (history.isEmpty()) return
         AppLogger.log("Service", "Saving ${history.size} history records...")
-        history.forEach { record ->
+        serviceScope.launch(Dispatchers.IO) {
             try {
-                database.sensorDao().insert(SensorEntity(
-                    macAddress = record.macAddress,
-                    temperature = record.temperature.toFloat(),
-                    humidity = record.humidity.toInt(),
-                    battery = record.battery,
-                    timestamp = record.timestamp
-                ))
-            } catch (e: Exception) { /* ignore */ }
+                val entities = history.map { record ->
+                    SensorEntity(
+                        macAddress = record.macAddress,
+                        temperature = record.temperature.toFloat(),
+                        humidity = record.humidity.toInt(),
+                        battery = record.battery,
+                        timestamp = record.timestamp
+                    )
+                }
+                database.sensorDao().insertAll(entities)
+            } catch (e: Exception) {
+                AppLogger.log("Service", "Failed to save history: ${e.message}")
+            }
         }
     }
 
@@ -220,6 +284,24 @@ class SensorForegroundService : Service() {
         val humStr = String.format(java.util.Locale.GERMANY, "%.1f", it.humidity)
         val devName = prefs.getDeviceName(it.macAddress)
         updateNotification(devName, "🌡️ $tempStr°C   💧 $humStr%")
+    }
+
+    private fun updateNotification(title: String, text: String) {
+        val notificationIntent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth) // Fallback icon
+            .setContentIntent(pendingIntent)
+            .setSilent(true) // Don't beep on every update
+            .build()
+
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.notify(NOTIFICATION_ID, notification)
     }
 
     private fun throttleSaveToDb(it: SensorData) {
@@ -241,5 +323,14 @@ class SensorForegroundService : Service() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        isServiceRunning = false
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.cancel(NOTIFICATION_ID)
+        wakeLock?.release()
+        serviceScope.cancel()
     }
 }

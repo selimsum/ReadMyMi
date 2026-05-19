@@ -81,7 +81,7 @@ class BluetoothSensorManager(private val context: Context) {
         if (_isScanning.value) return
 
         val filters = mutableListOf<ScanFilter>()
-        if (!targetMac.isNullOrEmpty() && BluetoothAdapter.checkBluetoothAddress(targetMac)) {
+        if (!targetMac.isNullOrEmpty() && try { BluetoothAdapter.checkBluetoothAddress(targetMac) } catch (e: IllegalArgumentException) { false }) {
             filters.add(ScanFilter.Builder().setDeviceAddress(targetMac).build())
         } else {
             listOf("fe95", "fcd2", "181a").forEach { uuid ->
@@ -227,7 +227,7 @@ class BluetoothSensorManager(private val context: Context) {
                     val temp = buffer.getShort(7) / 100.0
                     val hum = buffer.getShort(9) / 100.0
                     val vbat = buffer.getShort(11)
-                    val batPct = ((vbat - 2100).coerceIn(0, 1000) / 10.0).toInt()
+                    val batPct = SensorParser.calculateBatteryPercentage(vbat.toInt())
 
                     historyList.add(SensorData(
                         macAddress = g.device.address,
@@ -330,5 +330,52 @@ class BluetoothSensorManager(private val context: Context) {
             gatt.disconnect()
             gatt.close()
         }
+    }
+
+    @SuppressLint("MissingPermission")
+    suspend fun connectAndReadConfig(deviceAddress: String, onLog: (String) -> Unit): Map<String, String> = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        val configMap = mutableMapOf<String, String>()
+        val device = bluetoothAdapter?.getRemoteDevice(deviceAddress) ?: return@withContext configMap
+        val completion = kotlinx.coroutines.CompletableDeferred<Boolean>()
+
+        val gattCallback = object : BluetoothGattCallback() {
+            override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
+                if (newState == BluetoothProfile.STATE_CONNECTED) {
+                    onLog("Connected, discovering services...")
+                    g.discoverServices()
+                } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                    onLog("Disconnected.")
+                    completion.complete(true)
+                }
+            }
+
+            override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    onLog("Services discovered.")
+                    g.disconnect() // Just disconnecting for now, no actual reading logic implemented
+                } else {
+                    onLog("Service discovery failed.")
+                    g.disconnect()
+                }
+            }
+        }
+
+        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) return@withContext configMap
+
+        val gatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+        } else device.connectGatt(context, false, gattCallback)
+
+        try {
+            kotlinx.coroutines.withTimeout(15000) {
+                completion.await()
+            }
+        } catch (e: Exception) {
+            onLog("Timeout connecting.")
+            gatt?.disconnect()
+            gatt?.close()
+        }
+
+        return@withContext configMap
     }
 }
