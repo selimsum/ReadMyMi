@@ -51,7 +51,7 @@ fun AboutScreen(onBack: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(24.dp))
             Text("Read My Mi", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("v1.2.0", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+            Text("v1.3.0", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
             
             Spacer(modifier = Modifier.height(32.dp))
             
