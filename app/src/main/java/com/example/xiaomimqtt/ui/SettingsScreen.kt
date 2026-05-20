@@ -34,9 +34,11 @@ fun SettingsScreen(
     onStopService: () -> Unit,
     onShowAbout: () -> Unit,
     onShowDebug: () -> Unit,
+    onClearLastMac: () -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    var alertsEnabled by remember { mutableStateOf(prefs.alertsEnabled) }
     androidx.activity.compose.BackHandler { onBack() }
     
     LazyColumn(
@@ -77,6 +79,16 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(start = 8.dp, top = 4.dp)
             )
+            if (lastMac.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                TextButton(
+                    onClick = onClearLastMac,
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.padding(start = 8.dp)
+                ) {
+                    Text("Forget Device")
+                }
+            }
         }
 
         item {
@@ -96,7 +108,6 @@ fun SettingsScreen(
         }
 
         item {
-            var alertsEnabled by remember { mutableStateOf(prefs.alertsEnabled) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(checked = alertsEnabled, onCheckedChange = { alertsEnabled = it; prefs.alertsEnabled = it })
                 Spacer(modifier = Modifier.width(8.dp))
@@ -104,11 +115,47 @@ fun SettingsScreen(
             }
         }
         
-        if (prefs.alertsEnabled) {
-            item { AlertSetting("High Temperature (> °C)", prefs.alertTempHigh.toString()) { prefs.alertTempHigh = it.toFloat(); prefs.alertTempHighEnabled = true } }
-            item { AlertSetting("Low Temperature (< °C)", prefs.alertTempLow.toString()) { prefs.alertTempLow = it.toFloat(); prefs.alertTempLowEnabled = true } }
-            item { AlertSetting("High Humidity (> %)", prefs.alertHumidityHigh.toString()) { prefs.alertHumidityHigh = it.toInt(); prefs.alertHumidityHighEnabled = true } }
-            item { AlertSetting("Low Humidity (< %)", prefs.alertHumidityLow.toString()) { prefs.alertHumidityLow = it.toInt(); prefs.alertHumidityLowEnabled = true } }
+        if (alertsEnabled) {
+            item {
+                AlertThresholdRow(
+                    label = "High Temperature (°C)",
+                    enabled = prefs.alertTempHighEnabled,
+                    value = prefs.alertTempHigh.toString(),
+                    keyboardType = KeyboardType.Decimal,
+                    onEnabledChange = { prefs.alertTempHighEnabled = it },
+                    onValueChange = { it.toFloatOrNull()?.let { v -> prefs.alertTempHigh = v } }
+                )
+            }
+            item {
+                AlertThresholdRow(
+                    label = "Low Temperature (°C)",
+                    enabled = prefs.alertTempLowEnabled,
+                    value = prefs.alertTempLow.toString(),
+                    keyboardType = KeyboardType.Decimal,
+                    onEnabledChange = { prefs.alertTempLowEnabled = it },
+                    onValueChange = { it.toFloatOrNull()?.let { v -> prefs.alertTempLow = v } }
+                )
+            }
+            item {
+                AlertThresholdRow(
+                    label = "High Humidity (%)",
+                    enabled = prefs.alertHumidityHighEnabled,
+                    value = prefs.alertHumidityHigh.toString(),
+                    keyboardType = KeyboardType.Number,
+                    onEnabledChange = { prefs.alertHumidityHighEnabled = it },
+                    onValueChange = { it.toIntOrNull()?.let { v -> prefs.alertHumidityHigh = v } }
+                )
+            }
+            item {
+                AlertThresholdRow(
+                    label = "Low Humidity (%)",
+                    enabled = prefs.alertHumidityLowEnabled,
+                    value = prefs.alertHumidityLow.toString(),
+                    keyboardType = KeyboardType.Number,
+                    onEnabledChange = { prefs.alertHumidityLowEnabled = it },
+                    onValueChange = { it.toIntOrNull()?.let { v -> prefs.alertHumidityLow = v } }
+                )
+            }
         }
 
         item {
@@ -153,14 +200,37 @@ fun SettingsScreen(
 }
 
 @Composable
-fun AlertSetting(label: String, value: String, onValueChange: (String) -> Unit) {
+fun AlertThresholdRow(
+    label: String,
+    enabled: Boolean,
+    value: String,
+    keyboardType: KeyboardType,
+    onEnabledChange: (Boolean) -> Unit,
+    onValueChange: (String) -> Unit
+) {
+    var isEnabled by remember { mutableStateOf(enabled) }
     var text by remember { mutableStateOf(value) }
-    OutlinedTextField(
-        value = text,
-        onValueChange = { text = it; onValueChange(it) },
-        label = { Text(label) },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth()
-    )
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(
+                checked = isEnabled,
+                onCheckedChange = {
+                    isEnabled = it
+                    onEnabledChange(it)
+                },
+                modifier = Modifier.padding(end = 8.dp)
+            )
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+        }
+        if (isEnabled) {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it; onValueChange(it) },
+                label = { Text("Threshold value") },
+                keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
 }

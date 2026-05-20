@@ -87,6 +87,7 @@ class BluetoothSensorManager(private val context: Context) {
             listOf("fe95", "fcd2", "181a").forEach { uuid ->
                 val parcelUuid = ParcelUuid.fromString("0000$uuid-0000-1000-8000-00805f9b34fb")
                 filters.add(ScanFilter.Builder().setServiceUuid(parcelUuid).build())
+                filters.add(ScanFilter.Builder().setServiceData(parcelUuid, byteArrayOf()).build())
             }
         }
 
@@ -337,25 +338,78 @@ class BluetoothSensorManager(private val context: Context) {
         val configMap = mutableMapOf<String, String>()
         val device = bluetoothAdapter?.getRemoteDevice(deviceAddress) ?: return@withContext configMap
         val completion = kotlinx.coroutines.CompletableDeferred<Boolean>()
+        val readQueue = ArrayDeque<Pair<String, BluetoothGattCharacteristic>>() // UUID → char
 
         val gattCallback = object : BluetoothGattCallback() {
+            private var reading = false
+
             override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
                     onLog("Connected, discovering services...")
                     g.discoverServices()
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                     onLog("Disconnected.")
-                    completion.complete(true)
+                    if (!completion.isCompleted) completion.complete(true)
                 }
             }
 
             override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
                 if (status == BluetoothGatt.GATT_SUCCESS) {
-                    onLog("Services discovered.")
-                    g.disconnect() // Just disconnecting for now, no actual reading logic implemented
+                    onLog("Services discovered: ${g.services.size}")
+                    g.services.forEach { service ->
+                        service.characteristics.forEach { char ->
+                            val props = char.properties
+                            if (props and BluetoothGattCharacteristic.PROPERTY_READ != 0) {
+                                readQueue.add(service.uuid.toString().take(8) + "/" + char.uuid.toString().take(8) to char)
+                            }
+                        }
+                    }
+                    onLog("Readable characteristics: ${readQueue.size}")
+                    readNext(g)
                 } else {
-                    onLog("Service discovery failed.")
+                    onLog("Service discovery failed ($status).")
                     g.disconnect()
+                }
+            }
+
+            override fun onCharacteristicRead(g: BluetoothGatt, char: BluetoothGattCharacteristic, value: ByteArray, status: Int) {
+                reading = false
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    val hex = value.joinToString("") { "%02x".format(it) }
+                    val key = char.uuid.toString().take(8)
+                    configMap[key] = hex
+                    onLog("Read $key → $hex")
+                }
+                readNext(g)
+            }
+
+            // API < 33 fallback
+            @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+            override fun onCharacteristicRead(g: BluetoothGatt, char: BluetoothGattCharacteristic, status: Int) {
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                    reading = false
+                    if (status == BluetoothGatt.GATT_SUCCESS) {
+                        val hex = (char.value ?: byteArrayOf()).joinToString("") { "%02x".format(it) }
+                        val key = char.uuid.toString().take(8)
+                        configMap[key] = hex
+                        onLog("Read $key → $hex")
+                    }
+                    readNext(g)
+                }
+            }
+
+            private fun readNext(g: BluetoothGatt) {
+                if (reading) return
+                if (readQueue.isEmpty()) {
+                    onLog("All characteristics read.")
+                    g.disconnect()
+                    return
+                }
+                val (_, char) = readQueue.removeFirst()
+                reading = true
+                if (!g.readCharacteristic(char)) {
+                    reading = false
+                    readNext(g)
                 }
             }
         }
@@ -367,11 +421,10 @@ class BluetoothSensorManager(private val context: Context) {
         } else device.connectGatt(context, false, gattCallback)
 
         try {
-            kotlinx.coroutines.withTimeout(15000) {
-                completion.await()
-            }
+            kotlinx.coroutines.withTimeout(30000) { completion.await() }
         } catch (e: Exception) {
-            onLog("Timeout connecting.")
+            onLog("Timeout — ${e.message}")
+        } finally {
             gatt?.disconnect()
             gatt?.close()
         }

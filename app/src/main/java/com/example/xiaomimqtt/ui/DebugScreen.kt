@@ -161,12 +161,11 @@ fun ConfigTab(targetMac: String? = null) {
              statusLog = "Auto-Connecting to $targetMac..."
              configData = emptyMap()
              scope.launch {
-                /* val result = scanner.connectAndReadConfig(targetMac) { log ->
+                val result = scanner.connectAndReadConfig(targetMac) { log ->
                      statusLog = log
                 }
                 configData = result
-                statusLog = if (result.isNotEmpty()) "Read Complete" else "Read Failed / Timeout" */
-                statusLog = "Read Complete"
+                statusLog = if (result.isNotEmpty()) "Read Complete (${result.size} values)" else "Read Failed / No readable characteristics"
                 isConnecting = false
              }
         }
@@ -190,12 +189,11 @@ fun ConfigTab(targetMac: String? = null) {
                     configData = emptyMap()
                     
                     scope.launch {
-                        /* val result = scanner.connectAndReadConfig(macInput) { log ->
-                             statusLog = log // Update status live? Might need smoother updates
+                        val result = scanner.connectAndReadConfig(macInput) { log ->
+                             statusLog = log
                         }
                         configData = result
-                        statusLog = if (result.isNotEmpty()) "Read Complete" else "Read Failed / Timeout" */
-                        statusLog = "Read Complete"
+                        statusLog = if (result.isNotEmpty()) "Read Complete (${result.size} values)" else "Read Failed / No readable characteristics"
                         isConnecting = false
                     }
                 } else {

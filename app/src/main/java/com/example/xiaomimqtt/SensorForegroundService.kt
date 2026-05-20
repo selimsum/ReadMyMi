@@ -29,6 +29,8 @@ class SensorForegroundService : Service() {
     companion object {
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "XiaomiMqttServiceChannel"
+        private const val ALERTS_CHANNEL_ID = "XiaomiMqttAlertChannel"
+        private const val ALERT_NOTIFICATION_BASE_ID = 100
         var isServiceRunning = false
         val liveSensorData = kotlinx.coroutines.flow.MutableStateFlow<SensorData?>(null)
         val serviceStatus = kotlinx.coroutines.flow.MutableStateFlow("Initializing...")
@@ -44,6 +46,7 @@ class SensorForegroundService : Service() {
     private lateinit var database: SensorDatabase
     private lateinit var prefs: PrefsManager
     private val lastDbSaveMap = mutableMapOf<String, Long>() // Throttle DB saves
+    private val lastAlertMap = mutableMapOf<String, Long>() // Throttle alert notifications (per alert key)
 
     private val latestReadings = mutableMapOf<String, SensorData>()
     private val historyCheckedMap = mutableMapOf<String, Boolean>()
@@ -113,6 +116,8 @@ class SensorForegroundService : Service() {
             .setContentText("Running...")
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth) // Fallback icon
             .setContentIntent(pendingIntent)
+            .setSilent(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -124,13 +129,24 @@ class SensorForegroundService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = getSystemService(NotificationManager::class.java)
+            // Service status channel
             val serviceChannel = NotificationChannel(
                 CHANNEL_ID,
                 "Xiaomi MQTT Scanner Service Channel",
                 NotificationManager.IMPORTANCE_LOW
             )
-            val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(serviceChannel)
+            // Alert channel — higher importance so it shows as heads-up
+            val alertChannel = NotificationChannel(
+                ALERTS_CHANNEL_ID,
+                "Sensor Alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Alerts when temperature or humidity thresholds are exceeded"
+                enableVibration(true)
+            }
+            manager.createNotificationChannel(alertChannel)
         }
     }
 
@@ -148,13 +164,62 @@ class SensorForegroundService : Service() {
     }
 
     private fun checkAlerts(prefs: PrefsManager) {
-        // Implement alerts logic or leave empty if not fully implemented yet
+        val cooldownMs = 3600_000L // 1 hour between repeated alerts for the same condition
+        val now = System.currentTimeMillis()
+
+        latestReadings.forEach { (mac, data) ->
+            val devName = prefs.getDeviceName(mac)
+
+            fun maybeAlert(key: String, title: String, message: String) {
+                val lastAlert = lastAlertMap["$mac:$key"] ?: 0L
+                if (now - lastAlert >= cooldownMs) {
+                    lastAlertMap["$mac:$key"] = now
+                    sendAlertNotification(key.hashCode() + ALERT_NOTIFICATION_BASE_ID, title, "$devName: $message")
+                    AppLogger.log("Alert", "[$devName] $message")
+                }
+            }
+
+            fun clearAlert(key: String) {
+                lastAlertMap.remove("$mac:$key")
+            }
+
+            // Temperature alerts
+            if (prefs.alertTempHighEnabled && data.temperature > prefs.alertTempHigh) {
+                maybeAlert("temp_high", "🌡️ High Temperature", "${String.format("%.1f", data.temperature)}°C > ${prefs.alertTempHigh}°C")
+            } else { clearAlert("temp_high") }
+
+            if (prefs.alertTempLowEnabled && data.temperature < prefs.alertTempLow) {
+                maybeAlert("temp_low", "🌡️ Low Temperature", "${String.format("%.1f", data.temperature)}°C < ${prefs.alertTempLow}°C")
+            } else { clearAlert("temp_low") }
+
+            // Humidity alerts
+            if (prefs.alertHumidityHighEnabled && data.humidity > prefs.alertHumidityHigh) {
+                maybeAlert("hum_high", "💧 High Humidity", "${String.format("%.1f", data.humidity)}% > ${prefs.alertHumidityHigh}%")
+            } else { clearAlert("hum_high") }
+
+            if (prefs.alertHumidityLowEnabled && data.humidity < prefs.alertHumidityLow) {
+                maybeAlert("hum_low", "💧 Low Humidity", "${String.format("%.1f", data.humidity)}% < ${prefs.alertHumidityLow}%")
+            } else { clearAlert("hum_low") }
+        }
+    }
+
+    private fun sendAlertNotification(id: Int, title: String, text: String) {
+        val notificationIntent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE)
+        val notification = NotificationCompat.Builder(this, ALERTS_CHANNEL_ID)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setSmallIcon(android.R.drawable.stat_sys_warning)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+        getSystemService(NotificationManager::class.java).notify(id, notification)
     }
 
     private suspend fun performScan() {
         AppLogger.log("Service", "Starting Periodic Scan (15s)")
         serviceStatus.value = "Scanning (15s)..."
-        updateNotification("Xiaomi MQTT Scanner", "Scanning for sensors...")
         try {
             bluetoothSensorManager.startScanning(prefs.lastMac)
             kotlinx.coroutines.delay(15000)
@@ -169,9 +234,17 @@ class SensorForegroundService : Service() {
         val targetMac = prefs.lastMac
         if (targetMac.isNotEmpty()) {
             val lastSeen = lastPublishMap[targetMac] ?: 0L
-            if (lastSeen < scanStartTime && !prefs.getWasOffline(targetMac)) {
-                prefs.setWasOffline(targetMac, true)
-                AppLogger.log("Service", "Device $targetMac went offline.")
+            val isCurrentlyOffline = lastSeen < scanStartTime
+            val wasOffline = prefs.getWasOffline(targetMac)
+            when {
+                isCurrentlyOffline && !wasOffline -> {
+                    prefs.setWasOffline(targetMac, true)
+                    AppLogger.log("Service", "Device $targetMac went offline.")
+                }
+                !isCurrentlyOffline && wasOffline -> {
+                    prefs.setWasOffline(targetMac, false)
+                    AppLogger.log("Service", "Device $targetMac came back online.")
+                }
             }
         }
     }

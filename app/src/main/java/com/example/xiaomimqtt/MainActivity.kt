@@ -119,22 +119,43 @@ fun MainScreen(viewModel: MainViewModel) {
     var showDebug by remember { mutableStateOf(false) }
     var isDownloading by remember { mutableStateOf(false) }
 
-    val permissions = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        permissions.add(Manifest.permission.BLUETOOTH_SCAN)
-        permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
-    }
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+    val permissions = remember {
+        mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION).apply {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                add(Manifest.permission.BLUETOOTH_SCAN)
+                add(Manifest.permission.BLUETOOTH_CONNECT)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
     }
 
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        if (result.values.all { it }) viewModel.startService()
+        val essentialPermissions = permissions.filter { it != Manifest.permission.POST_NOTIFICATIONS }
+        val essentialGranted = essentialPermissions.all { result[it] == true }
+        if (essentialGranted) {
+            viewModel.startService()
+        } else {
+            Toast.makeText(context, "Essential Bluetooth and Location permissions are required to scan.", Toast.LENGTH_LONG).show()
+        }
     }
 
     LaunchedEffect(Unit) {
-        val allGranted = permissions.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
-        if (allGranted) viewModel.startService() else launcher.launch(permissions.toTypedArray())
+        val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+        if (bluetoothAdapter == null) {
+            Toast.makeText(context, "Bluetooth is not supported on this device.", Toast.LENGTH_LONG).show()
+        } else if (!bluetoothAdapter.isEnabled) {
+            Toast.makeText(context, "Please enable Bluetooth to scan for sensors.", Toast.LENGTH_LONG).show()
+        }
+
+        val essentialPermissions = permissions.filter { it != Manifest.permission.POST_NOTIFICATIONS }
+        val essentialGranted = essentialPermissions.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
+        if (essentialGranted) {
+            viewModel.startService()
+        } else {
+            launcher.launch(permissions.toTypedArray())
+        }
     }
 
     if (showDebug) {
@@ -179,6 +200,10 @@ fun MainScreen(viewModel: MainViewModel) {
                     onStopService = { viewModel.stopService() },
                     onShowAbout = { showAbout = true },
                     onShowDebug = { showDebug = true },
+                    onClearLastMac = {
+                        viewModel.updateLastMac("")
+                        viewModel.restartService()
+                    },
                     onBack = { showSettings = false }
                 )
             } else {

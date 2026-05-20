@@ -38,8 +38,17 @@ fun DashboardScreen(
     val pullRefreshState = rememberPullToRefreshState()
     
     if (sensorData == null) {
+        val serviceStatus by com.example.xiaomimqtt.SensorForegroundService.serviceStatus.collectAsState()
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Scanning for sensors...", style = MaterialTheme.typography.headlineSmall)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator(modifier = Modifier.size(48.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Scanning for sensors...", style = MaterialTheme.typography.headlineSmall)
+                if (serviceStatus.isNotBlank() && serviceStatus != "Initializing...") {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(serviceStatus, style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                }
+            }
         }
         return
     }
@@ -63,6 +72,13 @@ fun DashboardScreen(
 
 @Composable
 fun SensorMainCard(data: SensorData, prefs: PrefsManager) {
+    // Compute mood: happy if temp & humidity are within all enabled limits
+    val tempOk = (!prefs.alertTempHighEnabled || data.temperature <= prefs.alertTempHigh) &&
+                 (!prefs.alertTempLowEnabled  || data.temperature >= prefs.alertTempLow)
+    val humidityOk = (!prefs.alertHumidityHighEnabled || data.humidity <= prefs.alertHumidityHigh) &&
+                     (!prefs.alertHumidityLowEnabled  || data.humidity >= prefs.alertHumidityLow)
+    val isHappy = tempOk && humidityOk
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
@@ -76,6 +92,13 @@ fun SensorMainCard(data: SensorData, prefs: PrefsManager) {
                 Text(text = String.format("%.2f", data.temperature), style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.Bold, fontSize = 64.sp)
                 Text(text = "°C", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(start = 4.dp))
             }
+
+            Icon(
+                imageVector = if (isHappy) Icons.Rounded.SentimentSatisfied else Icons.Rounded.SentimentDissatisfied,
+                contentDescription = if (isHappy) "Conditions OK" else "Conditions out of range",
+                tint = if (isHappy) Color(0xFF4CAF50) else Color(0xFFF44336),
+                modifier = Modifier.size(36.dp)
+            )
             
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 StatusItem(Icons.Filled.WaterDrop, String.format("%.1f%%", data.humidity), "Humidity")

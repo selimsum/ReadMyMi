@@ -1,5 +1,6 @@
 # Android/Java
 /build/
+/build_old/
 /.gradle/
 /local.properties
 *.iml
