@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.xiaomimqtt.PercentFormatter
 import com.example.xiaomimqtt.PrefsManager
 import com.example.xiaomimqtt.SensorData
 import com.example.xiaomimqtt.data.SensorDatabase
@@ -133,8 +134,8 @@ fun SensorMainCard(
             )
             
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                StatusItem(Icons.Filled.WaterDrop, String.format("%.1f%%", data.humidity), "Humidity")
-                StatusItem(Icons.Filled.BatteryStd, "${data.battery}%", "Battery", color = if (data.battery < 20) Color.Red else MaterialTheme.colorScheme.primary)
+                StatusItem(Icons.Filled.WaterDrop, PercentFormatter.format(data.humidity), "Humidity")
+                StatusItem(Icons.Filled.BatteryStd, PercentFormatter.format(data.battery), "Battery", color = if (data.battery < 20) Color.Red else MaterialTheme.colorScheme.primary)
             }
             
             Spacer(modifier = Modifier.height(16.dp))

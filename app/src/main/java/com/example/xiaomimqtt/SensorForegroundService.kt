@@ -198,11 +198,11 @@ class SensorForegroundService : Service() {
 
             // Humidity alerts
             if (prefs.alertHumidityHighEnabled && data.humidity > prefs.alertHumidityHigh) {
-                maybeAlert("hum_high", "High Humidity", "${String.format("%.1f", data.humidity)}% > ${prefs.alertHumidityHigh}%")
+                maybeAlert("hum_high", "High Humidity", "${PercentFormatter.format(data.humidity)} > ${PercentFormatter.format(prefs.alertHumidityHigh)}")
             } else { clearAlert("hum_high") }
 
             if (prefs.alertHumidityLowEnabled && data.humidity < prefs.alertHumidityLow) {
-                maybeAlert("hum_low", "Low Humidity", "${String.format("%.1f", data.humidity)}% < ${prefs.alertHumidityLow}%")
+                maybeAlert("hum_low", "Low Humidity", "${PercentFormatter.format(data.humidity)} < ${PercentFormatter.format(prefs.alertHumidityLow)}")
             } else { clearAlert("hum_low") }
         }
     }
@@ -375,11 +375,11 @@ class SensorForegroundService : Service() {
 
     private fun updateLiveNotification(it: SensorData) {
         val tempStr = String.format(java.util.Locale.GERMANY, "%.1f", it.temperature)
-        val humStr = String.format(java.util.Locale.GERMANY, "%.1f", it.humidity)
+        val humStr = PercentFormatter.format(it.humidity)
         val lastUpdate = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
             .format(java.util.Date(it.timestamp))
         val devName = prefs.getDeviceName(it.macAddress)
-        updateNotification(devName, "Temp ${tempStr}C   Hum $humStr%   Last $lastUpdate")
+        updateNotification(devName, "Temp ${tempStr}C   Hum $humStr   Last $lastUpdate")
     }
 
     private fun updateNotification(title: String, text: String) {
