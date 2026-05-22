@@ -85,8 +85,11 @@ fun SensorMainCard(
                      (!prefs.alertHumidityLowEnabled  || data.humidity >= prefs.alertHumidityLow)
     val isHappy = tempOk && humidityOk
     val isOnline = isServiceRunning && !prefs.getWasOffline(data.macAddress)
-    val nextUpdateText = remember(serviceStatus, data.timestamp, prefs.scanIntervalSeconds) {
-        getNextUpdateText(serviceStatus, data.timestamp, prefs.scanIntervalSeconds)
+    val lastUpdateTime = remember(data.timestamp) {
+        SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(data.timestamp))
+    }
+    val nextUpdateTime = remember(serviceStatus, data.timestamp, prefs.scanIntervalSeconds) {
+        getNextUpdateTime(serviceStatus, data.timestamp, prefs.scanIntervalSeconds)
     }
 
     Card(
@@ -98,25 +101,22 @@ fun SensorMainCard(
             Text(text = prefs.getDeviceName(data.macAddress), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Medium)
             Spacer(modifier = Modifier.height(8.dp))
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.Center
             ) {
-                AssistChip(
-                    onClick = {},
-                    label = { Text(if (isOnline) "Online" else "Offline") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = if (isOnline) Icons.Filled.CheckCircle else Icons.Filled.CloudOff,
-                            contentDescription = if (isOnline) "Online" else "Offline",
-                            tint = if (isOnline) Color(0xFF4CAF50) else Color(0xFFF44336),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                Icon(
+                    imageVector = if (isOnline) Icons.Filled.CheckCircle else Icons.Filled.CloudOff,
+                    contentDescription = if (isOnline) "Online" else "Offline",
+                    tint = if (isOnline) Color(0xFF4CAF50) else Color(0xFFF44336),
+                    modifier = Modifier.size(18.dp)
                 )
+                Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = nextUpdateText,
+                    text = "${if (isOnline) "Online" else "Offline"} · Last $lastUpdateTime · Next $nextUpdateTime",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
+                    color = Color.Gray,
+                    maxLines = 2
                 )
             }
             
@@ -138,14 +138,11 @@ fun SensorMainCard(
                 StatusItem(Icons.Filled.BatteryStd, PercentFormatter.format(data.battery), "Battery", color = if (data.battery < 20) Color.Red else MaterialTheme.colorScheme.primary)
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
-            val time = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(data.timestamp))
-            Text("Last updated: $time", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
         }
     }
 }
 
-private fun getNextUpdateText(serviceStatus: String, lastReadingTimestamp: Long, scanIntervalSeconds: Int): String {
+private fun getNextUpdateTime(serviceStatus: String, lastReadingTimestamp: Long, scanIntervalSeconds: Int): String {
     val remainingSeconds = Regex("""Sleeping\.\.\. \((\d+)s\)""")
         .find(serviceStatus)
         ?.groupValues
@@ -158,8 +155,7 @@ private fun getNextUpdateText(serviceStatus: String, lastReadingTimestamp: Long,
         lastReadingTimestamp + scanIntervalSeconds.coerceAtLeast(30) * 1000L
     }
 
-    val time = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(nextUpdateMillis))
-    return "Next update: $time"
+    return SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(nextUpdateMillis))
 }
 
 @Composable

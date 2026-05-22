@@ -118,7 +118,7 @@ class SensorForegroundService : Service() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Xiaomi MQTT Scanner")
             .setContentText("Running...")
-            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth) // Fallback icon
+            .setSmallIcon(R.drawable.ic_app_logo_png)
             .setContentIntent(pendingIntent)
             .setSilent(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -376,10 +376,10 @@ class SensorForegroundService : Service() {
     private fun updateLiveNotification(it: SensorData) {
         val tempStr = String.format(java.util.Locale.GERMANY, "%.1f", it.temperature)
         val humStr = PercentFormatter.format(it.humidity)
-        val lastUpdate = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+        val lastUpdate = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
             .format(java.util.Date(it.timestamp))
         val devName = prefs.getDeviceName(it.macAddress)
-        updateNotification(devName, "Temp ${tempStr}C   Hum $humStr   Last $lastUpdate")
+        updateNotification(devName, "🌡 ${tempStr}°C   💧 $humStr   🕒 $lastUpdate")
     }
 
     private fun updateNotification(title: String, text: String) {
@@ -391,7 +391,7 @@ class SensorForegroundService : Service() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(text)
-            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth) // Fallback icon
+            .setSmallIcon(R.drawable.ic_app_logo_png)
             .setContentIntent(pendingIntent)
             .setSilent(true) // Don't beep on every update
             .build()
