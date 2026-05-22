@@ -141,7 +141,7 @@ class SensorForegroundService : Service() {
                 NotificationManager.IMPORTANCE_LOW
             )
             manager.createNotificationChannel(serviceChannel)
-            // Alert channel — higher importance so it shows as heads-up
+            // Alert channel has higher importance so it shows as heads-up.
             val alertChannel = NotificationChannel(
                 ALERTS_CHANNEL_ID,
                 "Sensor Alerts",
@@ -189,20 +189,20 @@ class SensorForegroundService : Service() {
 
             // Temperature alerts
             if (prefs.alertTempHighEnabled && data.temperature > prefs.alertTempHigh) {
-                maybeAlert("temp_high", "🌡️ High Temperature", "${String.format("%.1f", data.temperature)}°C > ${prefs.alertTempHigh}°C")
+                maybeAlert("temp_high", "High Temperature", "${String.format("%.1f", data.temperature)}C > ${prefs.alertTempHigh}C")
             } else { clearAlert("temp_high") }
 
             if (prefs.alertTempLowEnabled && data.temperature < prefs.alertTempLow) {
-                maybeAlert("temp_low", "🌡️ Low Temperature", "${String.format("%.1f", data.temperature)}°C < ${prefs.alertTempLow}°C")
+                maybeAlert("temp_low", "Low Temperature", "${String.format("%.1f", data.temperature)}C < ${prefs.alertTempLow}C")
             } else { clearAlert("temp_low") }
 
             // Humidity alerts
             if (prefs.alertHumidityHighEnabled && data.humidity > prefs.alertHumidityHigh) {
-                maybeAlert("hum_high", "💧 High Humidity", "${String.format("%.1f", data.humidity)}% > ${prefs.alertHumidityHigh}%")
+                maybeAlert("hum_high", "High Humidity", "${String.format("%.1f", data.humidity)}% > ${prefs.alertHumidityHigh}%")
             } else { clearAlert("hum_high") }
 
             if (prefs.alertHumidityLowEnabled && data.humidity < prefs.alertHumidityLow) {
-                maybeAlert("hum_low", "💧 Low Humidity", "${String.format("%.1f", data.humidity)}% < ${prefs.alertHumidityLow}%")
+                maybeAlert("hum_low", "Low Humidity", "${String.format("%.1f", data.humidity)}% < ${prefs.alertHumidityLow}%")
             } else { clearAlert("hum_low") }
         }
     }
@@ -376,8 +376,10 @@ class SensorForegroundService : Service() {
     private fun updateLiveNotification(it: SensorData) {
         val tempStr = String.format(java.util.Locale.GERMANY, "%.1f", it.temperature)
         val humStr = String.format(java.util.Locale.GERMANY, "%.1f", it.humidity)
+        val lastUpdate = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+            .format(java.util.Date(it.timestamp))
         val devName = prefs.getDeviceName(it.macAddress)
-        updateNotification(devName, "🌡️ $tempStr°C   💧 $humStr%")
+        updateNotification(devName, "Temp ${tempStr}C   Hum $humStr%   Last $lastUpdate")
     }
 
     private fun updateNotification(title: String, text: String) {
