@@ -31,6 +31,10 @@ class SensorForegroundService : Service() {
         private const val CHANNEL_ID = "XiaomiMqttServiceChannel"
         private const val ALERTS_CHANNEL_ID = "XiaomiMqttAlertChannel"
         private const val ALERT_NOTIFICATION_BASE_ID = 100
+        private const val HISTORY_GAP_THRESHOLD_MS = 30 * 60 * 1000L
+        private const val HISTORY_RECORD_INTERVAL_MS = 10 * 60 * 1000L
+        private const val DEFAULT_HISTORY_RECORDS = 70
+        private const val MAX_HISTORY_RECORDS = 512
         var isServiceRunning = false
         val liveSensorData = kotlinx.coroutines.flow.MutableStateFlow<SensorData?>(null)
         val serviceStatus = kotlinx.coroutines.flow.MutableStateFlow("Initializing...")
@@ -318,17 +322,34 @@ class SensorForegroundService : Service() {
             try {
                 val latestDbTimestamp = database.sensorDao().getLatestTimestamp(mac)
                 val now = System.currentTimeMillis()
-                val gapThreshold = 1800000L // 30 mins
-                
-                if (latestDbTimestamp == null || (now - latestDbTimestamp) > gapThreshold) {
-                    AppLogger.log("Service", "Data gap detected. Downloading history...")
-                    val history = bluetoothSensorManager.downloadHistory(mac, records = 0) { AppLogger.log("BLE", it) }
-                    saveHistoryToDb(history)
+                val missingSince = latestDbTimestamp ?: 0L
+                val missingDuration = now - missingSince
+
+                if (latestDbTimestamp == null || missingDuration > HISTORY_GAP_THRESHOLD_MS) {
+                    val recordsToDownload = estimateHistoryRecordCount(missingDuration, latestDbTimestamp == null)
+                    AppLogger.log("Service", "Data gap detected. Downloading up to $recordsToDownload history records...")
+                    val history = bluetoothSensorManager.downloadHistory(mac, records = recordsToDownload) { AppLogger.log("BLE", it) }
+                    val missingHistory = history
+                        .filter { it.timestamp > missingSince && it.timestamp <= now }
+                        .distinctBy { it.timestamp }
+                        .sortedBy { it.timestamp }
+
+                    if (missingHistory.isNotEmpty()) {
+                        saveHistoryToDb(missingHistory)
+                    } else {
+                        AppLogger.log("Service", "No missing history records found on device.")
+                    }
                 }
             } catch (e: Exception) {
                 AppLogger.log("Service", "History sync failed: ${e.message}")
             }
         }
+    }
+
+    private fun estimateHistoryRecordCount(missingDuration: Long, isInitialSync: Boolean): Int {
+        if (isInitialSync) return DEFAULT_HISTORY_RECORDS
+        val estimatedRecords = (missingDuration / HISTORY_RECORD_INTERVAL_MS).toInt() + 2
+        return estimatedRecords.coerceIn(1, MAX_HISTORY_RECORDS)
     }
 
     private fun saveHistoryToDb(history: List<SensorData>) {

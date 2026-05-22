@@ -36,9 +36,9 @@ fun DashboardScreen(
     onDownloadHistory: (Int) -> Unit
 ) {
     val pullRefreshState = rememberPullToRefreshState()
+    val serviceStatus by com.example.xiaomimqtt.SensorForegroundService.serviceStatus.collectAsState()
     
     if (sensorData == null) {
-        val serviceStatus by com.example.xiaomimqtt.SensorForegroundService.serviceStatus.collectAsState()
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 CircularProgressIndicator(modifier = Modifier.size(48.dp))
@@ -63,7 +63,7 @@ fun DashboardScreen(
             modifier = Modifier.fillMaxSize().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            item { SensorMainCard(sensorData, prefs) }
+            item { SensorMainCard(sensorData, prefs, isServiceRunning, serviceStatus) }
             item { HistoryChartCard(sensorData.macAddress, database) }
             item { HistoryActions(isDownloading, onDownloadHistory) }
         }
@@ -71,13 +71,22 @@ fun DashboardScreen(
 }
 
 @Composable
-fun SensorMainCard(data: SensorData, prefs: PrefsManager) {
+fun SensorMainCard(
+    data: SensorData,
+    prefs: PrefsManager,
+    isServiceRunning: Boolean,
+    serviceStatus: String
+) {
     // Compute mood: happy if temp & humidity are within all enabled limits
     val tempOk = (!prefs.alertTempHighEnabled || data.temperature <= prefs.alertTempHigh) &&
                  (!prefs.alertTempLowEnabled  || data.temperature >= prefs.alertTempLow)
     val humidityOk = (!prefs.alertHumidityHighEnabled || data.humidity <= prefs.alertHumidityHigh) &&
                      (!prefs.alertHumidityLowEnabled  || data.humidity >= prefs.alertHumidityLow)
     val isHappy = tempOk && humidityOk
+    val isOnline = isServiceRunning && !prefs.getWasOffline(data.macAddress)
+    val nextUpdateText = remember(serviceStatus, data.timestamp, prefs.scanIntervalSeconds) {
+        getNextUpdateText(serviceStatus, data.timestamp, prefs.scanIntervalSeconds)
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -86,6 +95,29 @@ fun SensorMainCard(data: SensorData, prefs: PrefsManager) {
     ) {
         Column(modifier = Modifier.padding(24.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(text = prefs.getDeviceName(data.macAddress), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Medium)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                AssistChip(
+                    onClick = {},
+                    label = { Text(if (isOnline) "Online" else "Offline") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = if (isOnline) Icons.Filled.CheckCircle else Icons.Filled.CloudOff,
+                            contentDescription = if (isOnline) "Online" else "Offline",
+                            tint = if (isOnline) Color(0xFF4CAF50) else Color(0xFFF44336),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                )
+                Text(
+                    text = nextUpdateText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
+            }
             
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.DeviceThermostat, contentDescription = null, modifier = Modifier.height(48.dp))
@@ -110,6 +142,23 @@ fun SensorMainCard(data: SensorData, prefs: PrefsManager) {
             Text("Last updated: $time", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
         }
     }
+}
+
+private fun getNextUpdateText(serviceStatus: String, lastReadingTimestamp: Long, scanIntervalSeconds: Int): String {
+    val remainingSeconds = Regex("""Sleeping\.\.\. \((\d+)s\)""")
+        .find(serviceStatus)
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.toLongOrNull()
+
+    val nextUpdateMillis = if (remainingSeconds != null) {
+        System.currentTimeMillis() + remainingSeconds * 1000L
+    } else {
+        lastReadingTimestamp + scanIntervalSeconds.coerceAtLeast(30) * 1000L
+    }
+
+    val time = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(nextUpdateMillis))
+    return "Next update: $time"
 }
 
 @Composable

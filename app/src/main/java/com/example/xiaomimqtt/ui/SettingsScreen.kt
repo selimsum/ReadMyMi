@@ -15,8 +15,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,7 +40,16 @@ fun SettingsScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     var alertsEnabled by remember { mutableStateOf(prefs.alertsEnabled) }
+    var alertTempHighEnabled by remember { mutableStateOf(prefs.alertTempHighEnabled) }
+    var alertTempLowEnabled by remember { mutableStateOf(prefs.alertTempLowEnabled) }
+    var alertHumidityHighEnabled by remember { mutableStateOf(prefs.alertHumidityHighEnabled) }
+    var alertHumidityLowEnabled by remember { mutableStateOf(prefs.alertHumidityLowEnabled) }
+    var alertTempHigh by remember { mutableStateOf(prefs.alertTempHigh.toString()) }
+    var alertTempLow by remember { mutableStateOf(prefs.alertTempLow.toString()) }
+    var alertHumidityHigh by remember { mutableStateOf(prefs.alertHumidityHigh.toString()) }
+    var alertHumidityLow by remember { mutableStateOf(prefs.alertHumidityLow.toString()) }
     androidx.activity.compose.BackHandler { onBack() }
     
     LazyColumn(
@@ -119,41 +130,65 @@ fun SettingsScreen(
             item {
                 AlertThresholdRow(
                     label = "High Temperature (°C)",
-                    enabled = prefs.alertTempHighEnabled,
-                    value = prefs.alertTempHigh.toString(),
+                    enabled = alertTempHighEnabled,
+                    value = alertTempHigh,
                     keyboardType = KeyboardType.Decimal,
-                    onEnabledChange = { prefs.alertTempHighEnabled = it },
-                    onValueChange = { it.toFloatOrNull()?.let { v -> prefs.alertTempHigh = v } }
+                    onEnabledChange = {
+                        alertTempHighEnabled = it
+                        prefs.alertTempHighEnabled = it
+                    },
+                    onValueChange = {
+                        alertTempHigh = it
+                        it.toFloatOrNull()?.let { v -> prefs.alertTempHigh = v }
+                    }
                 )
             }
             item {
                 AlertThresholdRow(
                     label = "Low Temperature (°C)",
-                    enabled = prefs.alertTempLowEnabled,
-                    value = prefs.alertTempLow.toString(),
+                    enabled = alertTempLowEnabled,
+                    value = alertTempLow,
                     keyboardType = KeyboardType.Decimal,
-                    onEnabledChange = { prefs.alertTempLowEnabled = it },
-                    onValueChange = { it.toFloatOrNull()?.let { v -> prefs.alertTempLow = v } }
+                    onEnabledChange = {
+                        alertTempLowEnabled = it
+                        prefs.alertTempLowEnabled = it
+                    },
+                    onValueChange = {
+                        alertTempLow = it
+                        it.toFloatOrNull()?.let { v -> prefs.alertTempLow = v }
+                    }
                 )
             }
             item {
                 AlertThresholdRow(
                     label = "High Humidity (%)",
-                    enabled = prefs.alertHumidityHighEnabled,
-                    value = prefs.alertHumidityHigh.toString(),
+                    enabled = alertHumidityHighEnabled,
+                    value = alertHumidityHigh,
                     keyboardType = KeyboardType.Number,
-                    onEnabledChange = { prefs.alertHumidityHighEnabled = it },
-                    onValueChange = { it.toIntOrNull()?.let { v -> prefs.alertHumidityHigh = v } }
+                    onEnabledChange = {
+                        alertHumidityHighEnabled = it
+                        prefs.alertHumidityHighEnabled = it
+                    },
+                    onValueChange = {
+                        alertHumidityHigh = it
+                        it.toIntOrNull()?.let { v -> prefs.alertHumidityHigh = v }
+                    }
                 )
             }
             item {
                 AlertThresholdRow(
                     label = "Low Humidity (%)",
-                    enabled = prefs.alertHumidityLowEnabled,
-                    value = prefs.alertHumidityLow.toString(),
+                    enabled = alertHumidityLowEnabled,
+                    value = alertHumidityLow,
                     keyboardType = KeyboardType.Number,
-                    onEnabledChange = { prefs.alertHumidityLowEnabled = it },
-                    onValueChange = { it.toIntOrNull()?.let { v -> prefs.alertHumidityLow = v } }
+                    onEnabledChange = {
+                        alertHumidityLowEnabled = it
+                        prefs.alertHumidityLowEnabled = it
+                    },
+                    onValueChange = {
+                        alertHumidityLow = it
+                        it.toIntOrNull()?.let { v -> prefs.alertHumidityLow = v }
+                    }
                 )
             }
         }
@@ -180,8 +215,24 @@ fun SettingsScreen(
         }
 
         item {
-            Text("Logs", style = MaterialTheme.typography.titleMedium)
             val logs by AppLogger.logs.collectAsState()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Logs", style = MaterialTheme.typography.titleMedium)
+                IconButton(
+                    onClick = {
+                        val logText = logs.joinToString(separator = "\n")
+                        clipboardManager.setText(AnnotatedString(logText))
+                        Toast.makeText(context, "Logs copied", Toast.LENGTH_SHORT).show()
+                    },
+                    enabled = logs.isNotEmpty()
+                ) {
+                    Icon(Icons.Filled.ContentCopy, contentDescription = "Copy logs")
+                }
+            }
             Box(modifier = Modifier.fillMaxWidth().height(200.dp).background(Color.Black.copy(0.05f)).padding(8.dp)) {
                 LazyColumn {
                     items(logs) { log ->
@@ -208,24 +259,19 @@ fun AlertThresholdRow(
     onEnabledChange: (Boolean) -> Unit,
     onValueChange: (String) -> Unit
 ) {
-    var isEnabled by remember { mutableStateOf(enabled) }
-    var text by remember { mutableStateOf(value) }
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(
-                checked = isEnabled,
-                onCheckedChange = {
-                    isEnabled = it
-                    onEnabledChange(it)
-                },
+                checked = enabled,
+                onCheckedChange = onEnabledChange,
                 modifier = Modifier.padding(end = 8.dp)
             )
             Text(label, style = MaterialTheme.typography.bodyMedium)
         }
-        if (isEnabled) {
+        if (enabled) {
             OutlinedTextField(
-                value = text,
-                onValueChange = { text = it; onValueChange(it) },
+                value = value,
+                onValueChange = onValueChange,
                 label = { Text("Threshold value") },
                 keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
                 singleLine = true,
