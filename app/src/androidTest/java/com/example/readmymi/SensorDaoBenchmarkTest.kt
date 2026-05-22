@@ -1,12 +1,12 @@
-package com.example.xiaomimqtt
+package com.example.readmymi
 
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.example.xiaomimqtt.data.AppDatabase
-import com.example.xiaomimqtt.data.SensorDao
-import com.example.xiaomimqtt.data.SensorEntity
+import com.example.readmymi.data.AppDatabase
+import com.example.readmymi.data.SensorDao
+import com.example.readmymi.data.SensorEntity
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before

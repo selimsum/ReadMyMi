@@ -1,4 +1,4 @@
-package com.example.xiaomimqtt.ui
+package com.example.readmymi.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -17,11 +17,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.xiaomimqtt.PercentFormatter
-import com.example.xiaomimqtt.PrefsManager
-import com.example.xiaomimqtt.SensorData
-import com.example.xiaomimqtt.data.SensorDatabase
-import com.example.xiaomimqtt.data.SensorEntity
+import com.example.readmymi.PercentFormatter
+import com.example.readmymi.PrefsManager
+import com.example.readmymi.SensorData
+import com.example.readmymi.data.SensorDatabase
+import com.example.readmymi.data.SensorEntity
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -37,7 +37,7 @@ fun DashboardScreen(
     onDownloadHistory: (Int) -> Unit
 ) {
     val pullRefreshState = rememberPullToRefreshState()
-    val serviceStatus by com.example.xiaomimqtt.SensorForegroundService.serviceStatus.collectAsState()
+    val serviceStatus by com.example.readmymi.SensorForegroundService.serviceStatus.collectAsState()
     
     if (sensorData == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

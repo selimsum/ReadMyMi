@@ -1,4 +1,4 @@
-package com.example.xiaomimqtt.data
+package com.example.readmymi.data
 
 import androidx.room.Dao
 import androidx.room.Insert

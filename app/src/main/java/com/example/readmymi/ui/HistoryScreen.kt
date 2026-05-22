@@ -1,4 +1,4 @@
-package com.example.xiaomimqtt.ui
+package com.example.readmymi.ui
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,7 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.example.xiaomimqtt.data.SensorDatabase
+import com.example.readmymi.data.SensorDatabase
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map

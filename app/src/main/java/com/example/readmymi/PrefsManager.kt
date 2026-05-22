@@ -1,10 +1,10 @@
-package com.example.xiaomimqtt
+package com.example.readmymi
 
 import android.content.Context
 import android.content.SharedPreferences
 
 class PrefsManager(context: Context) {
-    private val prefs: SharedPreferences = context.getSharedPreferences("XiaomiMqttPrefs", Context.MODE_PRIVATE)
+    private val prefs: SharedPreferences = context.getSharedPreferences("ReadMyMiPrefs", Context.MODE_PRIVATE)
 
 
 

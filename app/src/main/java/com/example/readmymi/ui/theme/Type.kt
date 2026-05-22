@@ -1,4 +1,4 @@
-package com.example.xiaomimqtt.ui.theme
+package com.example.readmymi.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

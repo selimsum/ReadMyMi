@@ -1,4 +1,4 @@
-package com.example.xiaomimqtt
+package com.example.readmymi
 
 data class SensorData(
     val macAddress: String,

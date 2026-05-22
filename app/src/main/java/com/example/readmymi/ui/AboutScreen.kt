@@ -1,4 +1,4 @@
-package com.example.xiaomimqtt.ui
+package com.example.readmymi.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,7 +14,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.example.xiaomimqtt.R
+import com.example.readmymi.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

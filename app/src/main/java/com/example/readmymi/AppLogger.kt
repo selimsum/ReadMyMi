@@ -1,4 +1,4 @@
-package com.example.xiaomimqtt
+package com.example.readmymi
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow

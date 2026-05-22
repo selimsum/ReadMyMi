@@ -1,4 +1,4 @@
-package com.example.xiaomimqtt.ui.theme
+package com.example.readmymi.ui.theme
 
 import android.app.Activity
 import android.os.Build
@@ -28,7 +28,7 @@ private val LightColorScheme = lightColorScheme(
 )
 
 @Composable
-fun XiaomiMqttAppTheme(
+fun ReadMyMiTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,

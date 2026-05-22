@@ -1,4 +1,4 @@
-package com.example.xiaomimqtt
+package com.example.readmymi
 
 import android.Manifest
 import android.content.Intent
@@ -72,10 +72,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import kotlinx.coroutines.launch
-import com.example.xiaomimqtt.ui.theme.XiaomiMqttAppTheme
-import com.example.xiaomimqtt.ui.HistoryScreen
-import com.example.xiaomimqtt.ui.SensorChart
-import com.example.xiaomimqtt.data.SensorDatabase
+import com.example.readmymi.ui.theme.ReadMyMiTheme
+import com.example.readmymi.ui.HistoryScreen
+import com.example.readmymi.ui.SensorChart
+import com.example.readmymi.data.SensorDatabase
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
 import android.content.pm.PackageManager
@@ -83,11 +83,11 @@ import android.bluetooth.BluetoothAdapter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
-import com.example.xiaomimqtt.ui.DebugScreen
-import com.example.xiaomimqtt.ui.AboutScreen
-import com.example.xiaomimqtt.ui.SettingsScreen
-import com.example.xiaomimqtt.ui.DashboardScreen
-import com.example.xiaomimqtt.data.SensorEntity
+import com.example.readmymi.ui.DebugScreen
+import com.example.readmymi.ui.AboutScreen
+import com.example.readmymi.ui.SettingsScreen
+import com.example.readmymi.ui.DashboardScreen
+import com.example.readmymi.data.SensorEntity
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -95,7 +95,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            XiaomiMqttAppTheme {
+            ReadMyMiTheme {
                 MainScreen(viewModel)
             }
         }

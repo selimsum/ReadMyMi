@@ -1,4 +1,4 @@
-package com.example.xiaomimqtt
+package com.example.readmymi
 
 import android.util.Log
 import java.nio.ByteBuffer

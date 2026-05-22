@@ -1,4 +1,4 @@
-package com.example.xiaomimqtt
+package com.example.readmymi
 
 import org.junit.Test
 import java.text.SimpleDateFormat

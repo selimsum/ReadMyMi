@@ -1,4 +1,4 @@
-package com.example.xiaomimqtt.ui
+package com.example.readmymi.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -22,8 +22,8 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.xiaomimqtt.AppLogger
-import com.example.xiaomimqtt.PrefsManager
+import com.example.readmymi.AppLogger
+import com.example.readmymi.PrefsManager
 import android.widget.Toast
 
 @OptIn(ExperimentalMaterial3Api::class)

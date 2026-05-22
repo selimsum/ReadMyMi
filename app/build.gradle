@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace 'com.example.xiaomimqtt'
+    namespace 'com.example.readmymi'
     compileSdk 36
 
     defaultConfig {
-        applicationId "com.example.xiaomimqtt"
+        applicationId "com.example.readmymi"
         minSdk 31
         targetSdk 36
         versionCode 5

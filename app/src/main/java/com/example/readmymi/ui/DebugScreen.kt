@@ -1,4 +1,4 @@
-package com.example.xiaomimqtt.ui
+package com.example.readmymi.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -61,7 +61,7 @@ fun DebugScreen(
 @Composable
 fun RawScannerTab() {
     val context = LocalContext.current
-    val scanner = remember { com.example.xiaomimqtt.BluetoothSensorManager(context) }
+    val scanner = remember { com.example.readmymi.BluetoothSensorManager(context) }
     var isScanning by remember { mutableStateOf(false) }
     val rawResult by scanner.rawScanFlow.collectAsState()
     
@@ -146,7 +146,7 @@ fun RawScannerTab() {
 @Composable
 fun ConfigTab(targetMac: String? = null) {
     val context = LocalContext.current
-    val scanner = remember { com.example.xiaomimqtt.BluetoothSensorManager(context) }
+    val scanner = remember { com.example.readmymi.BluetoothSensorManager(context) }
     val scope = rememberCoroutineScope()
     
     var macInput by remember { mutableStateOf(targetMac ?: "") }

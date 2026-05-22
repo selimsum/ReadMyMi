@@ -1,4 +1,4 @@
-package com.example.xiaomimqtt
+package com.example.readmymi
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull

@@ -1,4 +1,4 @@
-package com.example.xiaomimqtt
+package com.example.readmymi
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -20,16 +20,16 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
-import com.example.xiaomimqtt.data.SensorDatabase
-import com.example.xiaomimqtt.data.SensorEntity
+import com.example.readmymi.data.SensorDatabase
+import com.example.readmymi.data.SensorEntity
 
 class SensorForegroundService : Service() {
 
     // Flag moved to companion
     companion object {
         private const val NOTIFICATION_ID = 1
-        private const val CHANNEL_ID = "XiaomiMqttServiceChannel"
-        private const val ALERTS_CHANNEL_ID = "XiaomiMqttAlertChannel"
+        private const val CHANNEL_ID = "ReadMyMiServiceChannel"
+        private const val ALERTS_CHANNEL_ID = "ReadMyMiAlertChannel"
         private const val ALERT_NOTIFICATION_BASE_ID = 100
         private const val HISTORY_GAP_THRESHOLD_MS = 30 * 60 * 1000L
         private const val HISTORY_RECORD_INTERVAL_MS = 10 * 60 * 1000L
@@ -97,7 +97,7 @@ class SensorForegroundService : Service() {
 
         // Acquire WakeLock for reliable background scanning
         val powerManager = getSystemService(PowerManager::class.java)
-        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "XiaomiMqtt::ScanWakeLock")
+        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ReadMyMi::ScanWakeLock")
         wakeLock?.acquire() // Indefinite acquisition until onDestroy
 
         database = SensorDatabase.getDatabase(this)
@@ -116,7 +116,7 @@ class SensorForegroundService : Service() {
         )
 
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Xiaomi MQTT Scanner")
+            .setContentTitle("Read My Mi Scanner")
             .setContentText("Running...")
             .setSmallIcon(R.drawable.ic_app_logo_png)
             .setContentIntent(pendingIntent)
@@ -137,7 +137,7 @@ class SensorForegroundService : Service() {
             // Service status channel
             val serviceChannel = NotificationChannel(
                 CHANNEL_ID,
-                "Xiaomi MQTT Scanner Service Channel",
+                "Read My Mi Scanner Service Channel",
                 NotificationManager.IMPORTANCE_LOW
             )
             manager.createNotificationChannel(serviceChannel)

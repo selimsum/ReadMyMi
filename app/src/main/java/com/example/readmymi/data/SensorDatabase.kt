@@ -1,4 +1,4 @@
-package com.example.xiaomimqtt.data
+package com.example.readmymi.data
 
 import android.content.Context
 import androidx.room.Database

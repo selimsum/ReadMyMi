@@ -1,4 +1,4 @@
-package com.example.xiaomimqtt
+package com.example.readmymi
 
 import java.text.NumberFormat
 import java.util.Locale

@@ -1,4 +1,4 @@
-package com.example.xiaomimqtt.ui
+package com.example.readmymi.ui
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -13,7 +13,7 @@ import lecho.lib.hellocharts.view.LineChartView
 import lecho.lib.hellocharts.view.Chart
 import lecho.lib.hellocharts.gesture.ZoomType
 import lecho.lib.hellocharts.gesture.ContainerScrollType
-import com.example.xiaomimqtt.data.SensorEntity
+import com.example.readmymi.data.SensorEntity
 import java.util.Date
 import java.util.Locale
 import java.text.SimpleDateFormat

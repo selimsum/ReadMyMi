@@ -1,11 +1,11 @@
-package com.example.xiaomimqtt
+package com.example.readmymi
 
 import android.app.Application
 import android.content.Intent
 import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.xiaomimqtt.data.SensorDatabase
+import com.example.readmymi.data.SensorDatabase
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
