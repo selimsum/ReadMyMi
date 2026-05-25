@@ -168,16 +168,15 @@ class SensorForegroundService : Service() {
     }
 
     private fun checkAlerts(prefs: PrefsManager) {
-        val cooldownMs = 3600_000L // 1 hour between repeated alerts for the same condition
         val now = System.currentTimeMillis()
 
         latestReadings.forEach { (mac, data) ->
             val devName = prefs.getDeviceName(mac)
 
             fun maybeAlert(key: String, title: String, message: String) {
-                val lastAlert = lastAlertMap["$mac:$key"] ?: 0L
-                if (now - lastAlert >= cooldownMs) {
-                    lastAlertMap["$mac:$key"] = now
+                val alertedKey = "$mac:$key"
+                if (!lastAlertMap.containsKey(alertedKey)) {
+                    lastAlertMap[alertedKey] = now
                     sendAlertNotification(key.hashCode() + ALERT_NOTIFICATION_BASE_ID, title, "$devName: $message")
                     AppLogger.log("Alert", "[$devName] $message")
                 }
@@ -213,7 +212,7 @@ class SensorForegroundService : Service() {
         val notification = NotificationCompat.Builder(this, ALERTS_CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(text)
-            .setSmallIcon(android.R.drawable.stat_sys_warning)
+            .setSmallIcon(R.drawable.ic_app_logo_png)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

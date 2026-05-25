@@ -176,7 +176,8 @@ fun HistoryChartCard(macAddress: String, database: SensorDatabase) {
     val endTime = System.currentTimeMillis()
     val startTime = when(timeFilter) {
         0 -> endTime - 24 * 60 * 60 * 1000L
-        1 -> endTime - 30L * 24 * 60 * 60 * 1000L
+        1 -> endTime - 7L * 24 * 60 * 60 * 1000L
+        2 -> endTime - 30L * 24 * 60 * 60 * 1000L
         else -> endTime - 180L * 24 * 60 * 60 * 1000L
     }
     
@@ -185,7 +186,7 @@ fun HistoryChartCard(macAddress: String, database: SensorDatabase) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                listOf("Day", "Month", "6 Months").forEachIndexed { index, label ->
+                listOf("Day", "Week", "Month", "6 Months").forEachIndexed { index, label ->
                     FilterChip(selected = timeFilter == index, onClick = { timeFilter = index }, label = { Text(label) })
                 }
             }

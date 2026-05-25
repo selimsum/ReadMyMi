@@ -37,21 +37,23 @@ fun HistoryScreen(
     val context = LocalContext.current
     val database = remember { SensorDatabase.getDatabase(context) }
     
-    // Time Range State: 0=Day, 1=Month, 2=6Months
+    // Time Range State: 0=Day, 1=Week, 2=Month, 3=6Months
     var timeFilter by remember { mutableStateOf(0) }
     
     val endTime = System.currentTimeMillis()
     val startTime = when(timeFilter) {
         0 -> endTime - 24 * 60 * 60 * 1000L // 1 Day
-        1 -> endTime - 30L * 24 * 60 * 60 * 1000L // 30 Days
-        2 -> endTime - 180L * 24 * 60 * 60 * 1000L // 6 Months
+        1 -> endTime - 7L * 24 * 60 * 60 * 1000L // 7 Days / Week
+        2 -> endTime - 30L * 24 * 60 * 60 * 1000L // 30 Days / Month
+        3 -> endTime - 180L * 24 * 60 * 60 * 1000L // 6 Months
         else -> endTime - 24 * 60 * 60 * 1000L
     }
 
     val bucketSize = when(timeFilter) {
         0 -> 10 * 60 * 1000L // 10 mins
-        1 -> 4 * 60 * 60 * 1000L // 4 hours
-        2 -> 24 * 60 * 60 * 1000L // 1 day
+        1 -> 1 * 60 * 60 * 1000L // 1 hour (Week)
+        2 -> 4 * 60 * 60 * 1000L // 4 hours
+        3 -> 24 * 60 * 60 * 1000L // 1 day
         else -> 10 * 60 * 1000L
     }
 
@@ -101,10 +103,12 @@ fun HistoryScreen(
         // Filter Buttons
         Row(modifier = Modifier.fillMaxWidth()) {
             FilterButton(text = "Day", selected = timeFilter == 0, onClick = { timeFilter = 0 }, modifier = Modifier.weight(1f))
-            Spacer(modifier = Modifier.width(8.dp))
-            FilterButton(text = "Month", selected = timeFilter == 1, onClick = { timeFilter = 1 }, modifier = Modifier.weight(1f))
-            Spacer(modifier = Modifier.width(8.dp))
-            FilterButton(text = "6 Months", selected = timeFilter == 2, onClick = { timeFilter = 2 }, modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.width(4.dp))
+            FilterButton(text = "Week", selected = timeFilter == 1, onClick = { timeFilter = 1 }, modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.width(4.dp))
+            FilterButton(text = "Month", selected = timeFilter == 2, onClick = { timeFilter = 2 }, modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.width(4.dp))
+            FilterButton(text = "6 Mos", selected = timeFilter == 3, onClick = { timeFilter = 3 }, modifier = Modifier.weight(1f))
         }
     }
 }

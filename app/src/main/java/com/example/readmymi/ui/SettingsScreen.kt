@@ -35,7 +35,6 @@ fun SettingsScreen(
     onStartService: () -> Unit,
     onStopService: () -> Unit,
     onShowAbout: () -> Unit,
-    onShowDebug: () -> Unit,
     onClearLastMac: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -239,12 +238,6 @@ fun SettingsScreen(
                         Text(log, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
                     }
                 }
-            }
-        }
-        
-        item {
-            Button(onClick = onShowDebug, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)) {
-                Text("Advanced / Debug Menu")
             }
         }
     }

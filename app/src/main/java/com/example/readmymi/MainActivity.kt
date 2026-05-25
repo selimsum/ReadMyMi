@@ -83,7 +83,6 @@ import android.bluetooth.BluetoothAdapter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
-import com.example.readmymi.ui.DebugScreen
 import com.example.readmymi.ui.AboutScreen
 import com.example.readmymi.ui.SettingsScreen
 import com.example.readmymi.ui.DashboardScreen
@@ -116,7 +115,6 @@ fun MainScreen(viewModel: MainViewModel) {
     
     var showSettings by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
-    var showDebug by remember { mutableStateOf(false) }
     var isDownloading by remember { mutableStateOf(false) }
 
     val permissions = remember {
@@ -158,11 +156,6 @@ fun MainScreen(viewModel: MainViewModel) {
         }
     }
 
-    if (showDebug) {
-        DebugScreen(targetMac = lastMac.takeIf { BluetoothAdapter.checkBluetoothAddress(it) }, onBackClick = { showDebug = false })
-        return
-    }
-
     if (showAbout) {
         AboutScreen(onBack = { showAbout = false })
         return
@@ -199,7 +192,6 @@ fun MainScreen(viewModel: MainViewModel) {
                     onStartService = { viewModel.startService(); showSettings = false },
                     onStopService = { viewModel.stopService() },
                     onShowAbout = { showAbout = true },
-                    onShowDebug = { showDebug = true },
                     onClearLastMac = {
                         viewModel.updateLastMac("")
                         viewModel.restartService()
