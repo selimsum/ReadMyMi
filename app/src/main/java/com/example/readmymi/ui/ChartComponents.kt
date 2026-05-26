@@ -70,7 +70,7 @@ fun SensorChart(
                     index.toFloat()
                 }
                 val unit = if (isTemperature) (if (tempUnit == "F") "°F" else "°C") else "%"
-                val timeStr = SimpleDateFormat("dd/MM HH:mm:ss", Locale.getDefault()).format(Date(item.timestamp))
+                val timeStr = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(Date(item.timestamp))
                 val labelText = "${String.format(Locale.US, "%.1f", yRaw)}$unit ($timeStr)"
                 PointValue(xRaw, yRaw).setLabel(labelText.toCharArray())
             }
