@@ -85,4 +85,44 @@ class PrefsManager(context: Context) {
     fun setLastTimeSync(mac: String, timestamp: Long) {
         prefs.edit().putLong("last_time_sync_$mac", timestamp).apply()
     }
+
+    var tempUnit: String
+        get() = prefs.getString("temp_unit", "C") ?: "C"
+        set(value) = prefs.edit().putString("temp_unit", value).apply()
+
+    var alertBatteryLowEnabled: Boolean
+        get() = prefs.getBoolean("alert_battery_low_enabled", false)
+        set(value) = prefs.edit().putBoolean("alert_battery_low_enabled", value).apply()
+
+    var alertBatteryLow: Int
+        get() = prefs.getInt("alert_battery_low", 20)
+        set(value) = prefs.edit().putInt("alert_battery_low", value).apply()
+
+    var offlineTimeoutMinutes: Int
+        get() = prefs.getInt("offline_timeout_minutes", 15)
+        set(value) = prefs.edit().putInt("offline_timeout_minutes", value).apply()
+
+    var autoPruningDays: Int
+        get() = prefs.getInt("auto_pruning_days", 0)
+        set(value) = prefs.edit().putInt("auto_pruning_days", value).apply()
+
+    var alertVibrationEnabled: Boolean
+        get() = prefs.getBoolean("alert_vibration_enabled", true)
+        set(value) = prefs.edit().putBoolean("alert_vibration_enabled", value).apply()
+
+    var autoHistorySyncMode: String
+        get() = prefs.getString("auto_history_sync_mode", "start") ?: "start"
+        set(value) = prefs.edit().putString("auto_history_sync_mode", value).apply()
+
+    var ongoingNotificationEnabled: Boolean
+        get() = prefs.getBoolean("ongoing_notification_enabled", true)
+        set(value) = prefs.edit().putBoolean("ongoing_notification_enabled", value).apply()
+
+    fun getLastHistorySyncTimestamp(mac: String): Long {
+        return prefs.getLong("last_history_sync_$mac", 0L)
+    }
+
+    fun setLastHistorySyncTimestamp(mac: String, timestamp: Long) {
+        prefs.edit().putLong("last_history_sync_$mac", timestamp).apply()
+    }
 }

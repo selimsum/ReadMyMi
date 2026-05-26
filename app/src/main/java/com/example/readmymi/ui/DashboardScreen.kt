@@ -14,9 +14,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
+import com.example.readmymi.TemperatureConverter
 import com.example.readmymi.PercentFormatter
 import com.example.readmymi.PrefsManager
 import com.example.readmymi.SensorData
@@ -36,6 +39,8 @@ fun DashboardScreen(
     onRefresh: () -> Unit,
     onDownloadHistory: (Int) -> Unit
 ) {
+    val scope = rememberCoroutineScope()
+    var isRefreshing by remember { mutableStateOf(false) }
     val pullRefreshState = rememberPullToRefreshState()
     val serviceStatus by com.example.readmymi.SensorForegroundService.serviceStatus.collectAsState()
     
@@ -55,8 +60,15 @@ fun DashboardScreen(
     }
 
     PullToRefreshBox(
-        isRefreshing = false, // Managed externally if needed
-        onRefresh = onRefresh,
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            isRefreshing = true
+            scope.launch {
+                onRefresh()
+                kotlinx.coroutines.delay(1000)
+                isRefreshing = false
+            }
+        },
         state = pullRefreshState,
         modifier = Modifier.fillMaxSize()
     ) {
@@ -78,11 +90,11 @@ fun SensorMainCard(
     isServiceRunning: Boolean,
     serviceStatus: String
 ) {
-    // Compute mood: happy if temp & humidity are within all enabled limits
-    val tempOk = (!prefs.alertTempHighEnabled || data.temperature <= prefs.alertTempHigh) &&
-                 (!prefs.alertTempLowEnabled  || data.temperature >= prefs.alertTempLow)
-    val humidityOk = (!prefs.alertHumidityHighEnabled || data.humidity <= prefs.alertHumidityHigh) &&
-                     (!prefs.alertHumidityLowEnabled  || data.humidity >= prefs.alertHumidityLow)
+    // Compute mood: happy if temp & humidity are within comfort parameters:
+    // Temperature: 21.0°C to 26.0°C
+    // Humidity: 30.0% to 60.0%
+    val tempOk = data.temperature in 21.0..26.0
+    val humidityOk = data.humidity in 30.0..60.0
     val isHappy = tempOk && humidityOk
     val isOnline = isServiceRunning && !prefs.getWasOffline(data.macAddress)
     val lastUpdateTime = remember(data.timestamp) {
@@ -120,10 +132,14 @@ fun SensorMainCard(
                 )
             }
             
+            val tempUnit = prefs.tempUnit
+            val displayTemp = TemperatureConverter.convert(data.temperature, tempUnit)
+            val tempLabel = if (tempUnit == "F") "°F" else "°C"
+
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.DeviceThermostat, contentDescription = null, modifier = Modifier.height(48.dp))
-                Text(text = String.format("%.2f", data.temperature), style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.Bold, fontSize = 64.sp)
-                Text(text = "°C", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(start = 4.dp))
+                Text(text = String.format("%.2f", displayTemp), style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.Bold, fontSize = 64.sp)
+                Text(text = tempLabel, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(start = 4.dp))
             }
 
             Icon(
@@ -172,6 +188,10 @@ fun StatusItem(icon: androidx.compose.ui.graphics.vector.ImageVector, value: Str
 
 @Composable
 fun HistoryChartCard(macAddress: String, database: SensorDatabase) {
+    val context = LocalContext.current
+    val prefs = remember { PrefsManager(context) }
+    val tempUnit = prefs.tempUnit
+
     var timeFilter by remember { mutableStateOf(0) }
     val endTime = System.currentTimeMillis()
     val startTime = when(timeFilter) {
@@ -192,9 +212,9 @@ fun HistoryChartCard(macAddress: String, database: SensorDatabase) {
             }
             
             if (historyData.isNotEmpty()) {
-                SensorChart(historyData, isTemperature = true)
+                SensorChart(historyData, isTemperature = true, tempUnit = tempUnit)
                 Spacer(modifier = Modifier.height(8.dp))
-                SensorChart(historyData, isTemperature = false)
+                SensorChart(historyData, isTemperature = false, tempUnit = tempUnit)
             } else {
                 Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
                     Text("No history data", color = Color.Gray)

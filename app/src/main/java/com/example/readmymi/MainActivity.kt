@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.KeyboardOptions
@@ -70,6 +72,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import kotlinx.coroutines.launch
 import com.example.readmymi.ui.theme.ReadMyMiTheme
@@ -161,26 +164,78 @@ fun MainScreen(viewModel: MainViewModel) {
         return
     }
 
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
-                title = { 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        androidx.compose.foundation.Image(
-                            painter = painterResource(id = R.drawable.ic_app_logo_png),
-                            contentDescription = "Logo",
-                            modifier = Modifier.size(32.dp).clip(RoundedCornerShape(6.dp))
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Read My Mi") 
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { showSettings = !showSettings }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
-                    }
-                }
-            )
+            if (!showSettings) {
+                TopAppBar(
+                    title = { 
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .background(
+                                        brush = Brush.linearGradient(
+                                            colors = listOf(
+                                                MaterialTheme.colorScheme.primary,
+                                                MaterialTheme.colorScheme.tertiary
+                                            )
+                                        ),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .padding(1.5.dp)
+                            ) {
+                                androidx.compose.foundation.Image(
+                                    painter = painterResource(id = R.drawable.ic_app_logo_png),
+                                    contentDescription = "Logo",
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(RoundedCornerShape(7.dp))
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "Read My Mi",
+                                style = TextStyle(
+                                    brush = Brush.linearGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.primary,
+                                            MaterialTheme.colorScheme.tertiary
+                                        )
+                                    ),
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 20.sp
+                                )
+                            ) 
+                        }
+                    },
+                    actions = {
+                        Box(
+                            modifier = Modifier
+                                .padding(end = 12.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                        ) {
+                            IconButton(onClick = { showSettings = !showSettings }) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = "Settings",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                        scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                        actionIconContentColor = MaterialTheme.colorScheme.onSurface
+                    ),
+                    scrollBehavior = scrollBehavior
+                )
+            }
         }
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding)) {

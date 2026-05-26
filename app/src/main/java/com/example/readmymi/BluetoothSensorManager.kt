@@ -43,11 +43,6 @@ class BluetoothSensorManager(private val context: Context) {
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
 
-    // Raw Scan Flow
-    private val _rawScanFlow = MutableStateFlow<ScanResult?>(null)
-    val rawScanFlow: StateFlow<ScanResult?> = _rawScanFlow.asStateFlow()
-    private var rawScanCallback: ScanCallback? = null
-
 
     private val scanCallback = object : ScanCallback() {
         @SuppressLint("MissingPermission")
@@ -113,45 +108,6 @@ class BluetoothSensorManager(private val context: Context) {
             AppLogger.log("BLE", "Stop Scan Error: ${e.message}")
         }
         _isScanning.value = false
-    }
-
-    @SuppressLint("MissingPermission")
-    fun startRawScan() {
-        val scanner = this.scanner ?: return
-        
-        if (rawScanCallback != null) return
-
-        rawScanCallback = object : ScanCallback() {
-            override fun onScanResult(callbackType: Int, result: ScanResult) {
-                _rawScanFlow.value = result
-            }
-        }
-
-        val settings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-            .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
-            .build()
-            
-        try {
-            scanner.startScan(null, settings, rawScanCallback)
-            AppLogger.log("BLE", "Raw Scanner STARTED")
-        } catch (e: Exception) {
-            AppLogger.log("BLE", "Raw Scan Start Failed: ${e.message}")
-        }
-    }
-
-    @SuppressLint("MissingPermission")
-    fun stopRawScan() {
-        val scanner = this.scanner ?: return
-        rawScanCallback?.let {
-            try {
-                scanner.stopScan(it)
-                AppLogger.log("BLE", "Raw Scanner STOPPED")
-            } catch (e: Exception) {
-                AppLogger.log("BLE", "Raw Scan Stop Error: ${e.message}")
-            }
-        }
-        rawScanCallback = null
     }
 
 

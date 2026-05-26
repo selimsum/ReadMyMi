@@ -30,4 +30,10 @@ interface SensorDao {
 
     @Query("SELECT DISTINCT macAddress FROM sensor_data")
     fun getKnownDevices(): Flow<List<String>>
+
+    @Query("DELETE FROM sensor_data")
+    suspend fun deleteAll()
+
+    @Query("SELECT * FROM sensor_data WHERE macAddress = :macAddress ORDER BY timestamp ASC")
+    suspend fun getAllHistoryDirect(macAddress: String): List<SensorEntity>
 }

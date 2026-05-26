@@ -14,6 +14,12 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.background
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import com.example.readmymi.R
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -23,15 +29,40 @@ fun AboutScreen(onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("About") },
+                title = {
+                    Text(
+                        text = "About",
+                        style = TextStyle(
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.primary,
+                                    MaterialTheme.colorScheme.tertiary
+                                )
+                            ),
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 20.sp
+                        )
+                    )
+                },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                    Box(
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                    ) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.primary,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
                 )
             )
         }
@@ -51,7 +82,7 @@ fun AboutScreen(onBack: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(24.dp))
             Text("Read My Mi", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("v1.3.0", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+            Text("v1.5.0", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
             
             Spacer(modifier = Modifier.height(32.dp))
             
@@ -61,10 +92,19 @@ fun AboutScreen(onBack: () -> Unit) {
                 textAlign = TextAlign.Center
             )
             
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                "Disclaimer: This application is an independent, open-source tool and is not affiliated with, authorized, sponsored, or endorsed by Xiaomi Inc. or any of its affiliates. All Xiaomi trademarks and product names are the property of their respective owners.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            
             Spacer(modifier = Modifier.weight(1f))
 
             Text(
-                "vibe coded by antigravity",
+                "vibe coded by Selim Şumlu",
                 style = MaterialTheme.typography.labelSmall,
                 color = Color.Gray.copy(alpha = 0.5f),
                 modifier = Modifier.padding(bottom = 8.dp)

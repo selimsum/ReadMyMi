@@ -29,6 +29,7 @@ class SensorForegroundService : Service() {
     companion object {
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "ReadMyMiServiceChannel"
+        private const val CHANNEL_SILENT_ID = "ReadMyMiServiceChannelSilent"
         private const val ALERTS_CHANNEL_ID = "ReadMyMiAlertChannel"
         private const val ALERT_NOTIFICATION_BASE_ID = 100
         private const val HISTORY_GAP_THRESHOLD_MS = 30 * 60 * 1000L
@@ -86,6 +87,16 @@ class SensorForegroundService : Service() {
                     }
                 }
             }
+        } else if (intent?.action == "UPDATE_NOTIFICATION") {
+            if (isServiceRunning) {
+                createNotificationChannel()
+                val lastData = liveSensorData.value
+                if (lastData != null) {
+                    updateLiveNotification(lastData)
+                } else {
+                    updateNotification("Read My Mi Scanner", "Running...")
+                }
+            }
         }
         return START_STICKY
     }
@@ -115,13 +126,20 @@ class SensorForegroundService : Service() {
             this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+        val channelId = if (prefs.ongoingNotificationEnabled) CHANNEL_ID else CHANNEL_SILENT_ID
+        val priority = if (prefs.ongoingNotificationEnabled) {
+            NotificationCompat.PRIORITY_LOW
+        } else {
+            NotificationCompat.PRIORITY_MIN
+        }
+
+        val notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Read My Mi Scanner")
             .setContentText("Running...")
             .setSmallIcon(R.drawable.ic_app_logo_png)
             .setContentIntent(pendingIntent)
             .setSilent(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(priority)
             .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -134,13 +152,25 @@ class SensorForegroundService : Service() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(NotificationManager::class.java)
-            // Service status channel
+            // Service status channel (Standard)
             val serviceChannel = NotificationChannel(
                 CHANNEL_ID,
                 "Read My Mi Scanner Service Channel",
                 NotificationManager.IMPORTANCE_LOW
             )
             manager.createNotificationChannel(serviceChannel)
+            
+            // Service status channel (Silent)
+            val silentChannel = NotificationChannel(
+                CHANNEL_SILENT_ID,
+                "Read My Mi Scanner Service Channel (Silent)",
+                NotificationManager.IMPORTANCE_MIN
+            )
+            manager.createNotificationChannel(silentChannel)
+            
+            // Delete alert channel first to dynamically apply vibration changes immediately
+            manager.deleteNotificationChannel(ALERTS_CHANNEL_ID)
+            
             // Alert channel has higher importance so it shows as heads-up.
             val alertChannel = NotificationChannel(
                 ALERTS_CHANNEL_ID,
@@ -148,7 +178,10 @@ class SensorForegroundService : Service() {
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Alerts when temperature or humidity thresholds are exceeded"
-                enableVibration(true)
+                enableVibration(prefs.alertVibrationEnabled)
+                if (!prefs.alertVibrationEnabled) {
+                    vibrationPattern = longArrayOf(0)
+                }
             }
             manager.createNotificationChannel(alertChannel)
         }
@@ -162,8 +195,27 @@ class SensorForegroundService : Service() {
             checkOfflineStatus(scanStartTime)
             if (prefs.alertsEnabled) checkAlerts(prefs)
             checkTimeSync()
+            performAutoPruning()
             
             runSleepLoop()
+        }
+    }
+
+    private suspend fun performAutoPruning() {
+        val now = System.currentTimeMillis()
+        val lastCheck = lastDbSaveMap["AUTO_PRUNE_CHECK"] ?: 0L
+        if (now - lastCheck > 3600000L) { // Once per hour
+            lastDbSaveMap["AUTO_PRUNE_CHECK"] = now
+            val pruningDays = prefs.autoPruningDays
+            if (pruningDays > 0) {
+                val cutoffTime = now - pruningDays * 24 * 60 * 60 * 1000L
+                try {
+                    database.sensorDao().deleteOldData(cutoffTime)
+                    AppLogger.log("Service", "Auto-pruning complete: deleted history older than $pruningDays days.")
+                } catch (e: Exception) {
+                    AppLogger.log("Service", "Auto-pruning error: ${e.message}")
+                }
+            }
         }
     }
 
@@ -203,6 +255,11 @@ class SensorForegroundService : Service() {
             if (prefs.alertHumidityLowEnabled && data.humidity < prefs.alertHumidityLow) {
                 maybeAlert("hum_low", "Low Humidity", "${PercentFormatter.format(data.humidity)} < ${PercentFormatter.format(prefs.alertHumidityLow)}")
             } else { clearAlert("hum_low") }
+
+            // Battery alerts
+            if (prefs.alertBatteryLowEnabled && data.battery < prefs.alertBatteryLow) {
+                maybeAlert("battery_low", "Low Battery", "Battery level is ${data.battery}% < ${prefs.alertBatteryLow}%")
+            } else { clearAlert("battery_low") }
         }
     }
 
@@ -237,12 +294,17 @@ class SensorForegroundService : Service() {
         val targetMac = prefs.lastMac
         if (targetMac.isNotEmpty()) {
             val lastSeen = lastPublishMap[targetMac] ?: 0L
-            val isCurrentlyOffline = lastSeen < scanStartTime
+            val timeoutMs = prefs.offlineTimeoutMinutes * 60 * 1000L
+            val isCurrentlyOffline = if (lastSeen > 0L) {
+                (scanStartTime - lastSeen) > timeoutMs
+            } else {
+                true
+            }
             val wasOffline = prefs.getWasOffline(targetMac)
             when {
                 isCurrentlyOffline && !wasOffline -> {
                     prefs.setWasOffline(targetMac, true)
-                    AppLogger.log("Service", "Device $targetMac went offline.")
+                    AppLogger.log("Service", "Device $targetMac went offline (no data for ${prefs.offlineTimeoutMinutes} mins).")
                 }
                 !isCurrentlyOffline && wasOffline -> {
                     prefs.setWasOffline(targetMac, false)
@@ -260,7 +322,7 @@ class SensorForegroundService : Service() {
             val targetMac = prefs.lastMac
             if (targetMac.isNotEmpty()) {
                 val lastSync = prefs.getLastTimeSync(targetMac)
-                if (now - lastSync > 259200000L) {
+                if (now - lastSync > 86400000L) { // Daily sync (24 hours)
                     performTimeSync(targetMac, now)
                 }
             }
@@ -300,9 +362,7 @@ class SensorForegroundService : Service() {
         latestReadings[data.macAddress] = data
         updateLastPublish(data.macAddress)
         
-        if (!historyCheckedMap.containsKey(data.macAddress)) {
-            checkAndDownloadHistory(data.macAddress)
-        }
+        checkAndDownloadHistory(data.macAddress)
         
         updateLiveNotification(data)
         throttleSaveToDb(data)
@@ -316,17 +376,34 @@ class SensorForegroundService : Service() {
     }
 
     private fun checkAndDownloadHistory(mac: String) {
-        historyCheckedMap[mac] = true
+        val mode = prefs.autoHistorySyncMode
+        if (mode == "off") {
+            return
+        }
+        
+        val now = System.currentTimeMillis()
+        if (mode == "start") {
+            if (historyCheckedMap.containsKey(mac)) {
+                return
+            }
+            historyCheckedMap[mac] = true
+        } else {
+            val intervalMs = if (mode == "12h") 12 * 3600 * 1000L else 24 * 3600 * 1000L
+            val lastSync = prefs.getLastHistorySyncTimestamp(mac)
+            if (now - lastSync < intervalMs) {
+                return
+            }
+        }
+
         serviceScope.launch(Dispatchers.IO) {
             try {
                 val latestDbTimestamp = database.sensorDao().getLatestTimestamp(mac)
-                val now = System.currentTimeMillis()
                 val missingSince = latestDbTimestamp ?: 0L
                 val missingDuration = now - missingSince
 
                 if (latestDbTimestamp == null || missingDuration > HISTORY_GAP_THRESHOLD_MS) {
                     val recordsToDownload = estimateHistoryRecordCount(missingDuration, latestDbTimestamp == null)
-                    AppLogger.log("Service", "Data gap detected. Downloading up to $recordsToDownload history records...")
+                    AppLogger.log("Service", "Syncing history ($mode). Downloading up to $recordsToDownload records...")
                     val history = bluetoothSensorManager.downloadHistory(mac, records = recordsToDownload) { AppLogger.log("BLE", it) }
                     val missingHistory = history
                         .filter { it.timestamp > missingSince && it.timestamp <= now }
@@ -335,8 +412,10 @@ class SensorForegroundService : Service() {
 
                     if (missingHistory.isNotEmpty()) {
                         saveHistoryToDb(missingHistory)
+                        prefs.setLastHistorySyncTimestamp(mac, now)
                     } else {
                         AppLogger.log("Service", "No missing history records found on device.")
+                        prefs.setLastHistorySyncTimestamp(mac, now)
                     }
                 }
             } catch (e: Exception) {
@@ -387,16 +466,27 @@ class SensorForegroundService : Service() {
             this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+        val channelId = if (prefs.ongoingNotificationEnabled) CHANNEL_ID else CHANNEL_SILENT_ID
+        val priority = if (prefs.ongoingNotificationEnabled) {
+            NotificationCompat.PRIORITY_LOW
+        } else {
+            NotificationCompat.PRIORITY_MIN
+        }
+
+        val notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle(title)
             .setContentText(text)
             .setSmallIcon(R.drawable.ic_app_logo_png)
             .setContentIntent(pendingIntent)
             .setSilent(true) // Don't beep on every update
+            .setPriority(priority)
             .build()
 
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.notify(NOTIFICATION_ID, notification)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
     }
 
     private fun throttleSaveToDb(it: SensorData) {

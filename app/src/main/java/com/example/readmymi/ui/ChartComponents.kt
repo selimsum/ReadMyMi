@@ -8,6 +8,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.material3.MaterialTheme
 import lecho.lib.hellocharts.model.*
 import lecho.lib.hellocharts.view.LineChartView
 import lecho.lib.hellocharts.view.Chart
@@ -23,12 +25,13 @@ import kotlin.math.roundToInt
 fun SensorChart(
     data: List<SensorEntity>,
     isTemperature: Boolean, // true for Temp, false for Humidity
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    tempUnit: String = "C"
 ) {
     if (data.isEmpty()) return
 
     val themeColor = if (isTemperature) android.graphics.Color.parseColor("#FF5722") else android.graphics.Color.parseColor("#03A9F4")
-    val labelColor = android.graphics.Color.LTGRAY
+    val labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
 
     AndroidView(
         modifier = modifier
@@ -51,6 +54,27 @@ fun SensorChart(
                 data
             }
 
+            val minTime = if (sampledData.isNotEmpty()) sampledData.first().timestamp else 0L
+            val maxTime = if (sampledData.isNotEmpty()) sampledData.last().timestamp else 0L
+            val duration = maxTime - minTime
+
+            val pointsData = sampledData.mapIndexed { index, item ->
+                val yRaw = if (isTemperature) {
+                    com.example.readmymi.TemperatureConverter.convert(item.temperature, tempUnit)
+                } else {
+                    item.humidity.toFloat()
+                }
+                val xRaw = if (duration > 0) {
+                    ((item.timestamp - minTime).toDouble() / duration * (sampledData.size - 1)).toFloat()
+                } else {
+                    index.toFloat()
+                }
+                val unit = if (isTemperature) (if (tempUnit == "F") "°F" else "°C") else "%"
+                val timeStr = SimpleDateFormat("dd/MM HH:mm:ss", Locale.getDefault()).format(Date(item.timestamp))
+                val labelText = "${String.format(Locale.US, "%.1f", yRaw)}$unit ($timeStr)"
+                PointValue(xRaw, yRaw).setLabel(labelText.toCharArray())
+            }
+
             // Custom Touch Listener for "Scrubbing" (Slide to Select) and Column/Vertical Hit detection
             // allowing the user to tap above/below points or slide finger to read data.
             chartView.setOnTouchListener { v, event ->
@@ -71,11 +95,19 @@ fun SensorChart(
                         val relativeX = (x - contentRect.left) / contentRect.width()
                         val valueX = viewport.left + (relativeX * viewport.width())
                         
-                        // Find nearest index
-                        val index = valueX.roundToInt().coerceIn(0, sampledData.size - 1)
+                        // Find point closest to valueX
+                        var nearestIndex = 0
+                        var minDiff = Float.MAX_VALUE
+                        for (i in pointsData.indices) {
+                            val diff = Math.abs(pointsData[i].x - valueX)
+                            if (diff < minDiff) {
+                                minDiff = diff
+                                nearestIndex = i
+                            }
+                        }
                         
                         // Select the point programmatically
-                        chart.selectValue(SelectedValue(0, index, SelectedValue.SelectedValueType.LINE))
+                        chart.selectValue(SelectedValue(0, nearestIndex, SelectedValue.SelectedValueType.LINE))
                     }
                     true // Consume event to prevent conflict with built-in scroll/zoom and force Scrub behavior
                 } else if (event.action == android.view.MotionEvent.ACTION_UP || 
@@ -92,11 +124,6 @@ fun SensorChart(
                 override fun onValueDeselected() {}
             }
 
-            val pointsData = sampledData.mapIndexed { index, item ->
-                val yRaw = if (isTemperature) item.temperature else item.humidity.toFloat()
-                PointValue(index.toFloat(), yRaw)
-            }
-
             // Ensure points are technically present for rendering, but minimal if dense
             val line = Line(pointsData).apply {
                 color = themeColor
@@ -111,16 +138,29 @@ fun SensorChart(
             val lines = listOf(line)
             val chartData = LineChartData(lines)
 
-            val formatStr = if (data.isNotEmpty() && data.last().timestamp - data.first().timestamp > 86400000L) "dd/MM HH:mm" else "HH:mm"
+            val formatStr = if (data.isNotEmpty() && data.last().timestamp - data.first().timestamp > 86400000L) "dd/MM" else "HH:mm"
             val dateFormat = SimpleDateFormat(formatStr, Locale.US)
             val axisXValues = mutableListOf<AxisValue>()
             
             if (sampledData.isNotEmpty()) {
-                val step = (sampledData.size / 5).coerceAtLeast(1)
+                val numLabels = if (sampledData.size < 6) sampledData.size else 6
+                val targetTimes = (0 until numLabels).map { i ->
+                    if (numLabels > 1) {
+                        minTime + (duration * i) / (numLabels - 1)
+                    } else {
+                        minTime
+                    }
+                }
+                
                 val sharedDate = Date()
-                for (i in sampledData.indices step step) {
-                    sharedDate.time = sampledData[i].timestamp
-                    axisXValues.add(AxisValue(i.toFloat()).setLabel(dateFormat.format(sharedDate)))
+                for (targetTime in targetTimes) {
+                    val labelX = if (duration > 0) {
+                        ((targetTime - minTime).toDouble() / duration * (sampledData.size - 1)).toFloat()
+                    } else {
+                        0f
+                    }
+                    sharedDate.time = targetTime
+                    axisXValues.add(AxisValue(labelX).setLabel(dateFormat.format(sharedDate)))
                 }
             }
 
@@ -134,7 +174,11 @@ fun SensorChart(
                 textColor = labelColor
                 textSize = 10
                 setHasLines(true)
-                val unit = if (isTemperature) "°C" else "%"
+                val unit = if (isTemperature) {
+                    if (tempUnit == "F") "°F" else "°C"
+                } else {
+                    "%"
+                }
                 name = unit
             }
 

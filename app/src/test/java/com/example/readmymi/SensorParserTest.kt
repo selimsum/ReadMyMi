@@ -44,7 +44,7 @@ class SensorParserTest {
         // Info: 0x40
         // Temp: type 0x02, value 2000 -> LE: D0 07
         // Voltage: type 0x0C, value 3000 (3.000V) -> 3000 is 0x0BB8 -> LE: B8 0B
-        // Battery should be (3000 - 2100) / 10 = 90
+        // Battery should be 100% under CR2032 non-linear mapping
         val payload = byteArrayOf(
             0x40.toByte(),
             0x02.toByte(), 0xD0.toByte(), 0x07.toByte(),
@@ -55,7 +55,28 @@ class SensorParserTest {
         val result = SensorParser.parse("TestDevice", "00:11:22:33:44:55", serviceData)
 
         assertEquals(20.0, result?.temperature)
-        assertEquals(90, result?.battery)
+        assertEquals(100, result?.battery)
+    }
+
+    @Test
+    fun testParseBTHome_VoltagePriority() {
+        // Info: 0x40
+        // Batt (percentage): type 0x01, value 99 (99%) -> 0x63
+        // Temp: type 0x02, value 2000 -> LE: D0 07
+        // Voltage: type 0x0C, value 2800 (2.800V) -> 0x0AF0 -> LE: F0 0A
+        // Battery should be calculated from voltage (50%), not raw 99%
+        val payload = byteArrayOf(
+            0x40.toByte(),
+            0x01.toByte(), 99.toByte(),
+            0x02.toByte(), 0xD0.toByte(), 0x07.toByte(),
+            0x0C.toByte(), 0xF0.toByte(), 0x0A.toByte()
+        )
+        val serviceData = mapOf("fcd2" to payload)
+
+        val result = SensorParser.parse("TestDevice", "00:11:22:33:44:55", serviceData)
+
+        assertEquals(20.0, result?.temperature)
+        assertEquals(50, result?.battery)
     }
 
     @Test
@@ -76,6 +97,30 @@ class SensorParserTest {
         assertEquals(21.5, result?.temperature)
         assertEquals(55.0, result?.humidity)
         assertEquals(80, result?.battery)
+    }
+
+    @Test
+    fun testParseATC_PVVX_13Bytes() {
+        // Payload has 13 bytes
+        // Temp at offset 6: value 2150 (21.50C) -> 0x0866 -> LE: 66 08
+        // Hum at offset 8: value 6300 (63.00%) -> 0x189C -> LE: 9C 18
+        // Voltage at offset 10: value 2800 (2.8V) -> 0x0AF0 -> LE: F0 0A
+        // Battery level at offset 12: 99 (99% - direct broadcast value)
+        val payload = ByteArray(13)
+        payload[6] = 0x66.toByte()
+        payload[7] = 0x08.toByte()
+        payload[8] = 0x9C.toByte()
+        payload[9] = 0x18.toByte()
+        payload[10] = 0xF0.toByte()
+        payload[11] = 0x0A.toByte()
+        payload[12] = 99.toByte()
+        
+        val serviceData = mapOf("181a" to payload)
+        val result = SensorParser.parse("TestDevice", "00:11:22:33:44:55", serviceData)
+        
+        assertEquals(21.5, result?.temperature)
+        assertEquals(63.0, result?.humidity)
+        assertEquals(50, result?.battery) // Derived from 2800mV, not the 99% broadcast byte
     }
 
     @Test
@@ -113,7 +158,7 @@ class SensorParserTest {
         // Temp at 11: 250 (25.0) -> FA 00
         // Hum at 13: 500 (50.0) -> F4 01
         // Voltage at 15: value 2800 (2.8V) -> 0x0AF0 -> LE: F0 0A
-        // Batt = ((2800 - 2100) / 10) = 70
+        // Batt = 50% under CR2032 non-linear mapping
         val payload = ByteArray(17)
         payload[11] = 0xFA.toByte()
         payload[12] = 0x00.toByte()
@@ -130,7 +175,7 @@ class SensorParserTest {
 
         assertEquals(25.0, result?.temperature)
         assertEquals(50.0, result?.humidity)
-        assertEquals(70, result?.battery)
+        assertEquals(50, result?.battery)
     }
 
     @Test

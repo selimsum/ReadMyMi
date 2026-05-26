@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.readmymi.data.SensorDatabase
+import com.example.readmymi.PrefsManager
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -36,6 +37,8 @@ fun HistoryScreen(
 ) {
     val context = LocalContext.current
     val database = remember { SensorDatabase.getDatabase(context) }
+    val prefs = remember { PrefsManager(context) }
+    val tempUnit = prefs.tempUnit
     
     // Time Range State: 0=Day, 1=Week, 2=Month, 3=6Months
     var timeFilter by remember { mutableStateOf(0) }
@@ -89,14 +92,15 @@ fun HistoryScreen(
         Spacer(modifier = Modifier.height(16.dp))
         
         // Temperature Chart
-        Text("Temperature (°C)", style = MaterialTheme.typography.bodyMedium)
-        SensorChart(data = historyData, isTemperature = true, modifier = Modifier.weight(1f))
+        val tempLabel = if (tempUnit == "F") "Temperature (°F)" else "Temperature (°C)"
+        Text(tempLabel, style = MaterialTheme.typography.bodyMedium)
+        SensorChart(data = historyData, isTemperature = true, modifier = Modifier.weight(1f), tempUnit = tempUnit)
         
         Spacer(modifier = Modifier.height(16.dp))
         
         // Humidity Chart
         Text("Humidity (%)", style = MaterialTheme.typography.bodyMedium)
-        SensorChart(data = historyData, isTemperature = false, modifier = Modifier.weight(1f))
+        SensorChart(data = historyData, isTemperature = false, modifier = Modifier.weight(1f), tempUnit = tempUnit)
         
         Spacer(modifier = Modifier.height(16.dp))
         
