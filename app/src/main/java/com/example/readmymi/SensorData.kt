@@ -6,5 +6,5 @@ data class SensorData(
     val temperature: Double,
     val humidity: Double,
     val battery: Int,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long
 )

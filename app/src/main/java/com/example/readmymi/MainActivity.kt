@@ -71,9 +71,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+
 import kotlinx.coroutines.launch
 import com.example.readmymi.ui.theme.ReadMyMiTheme
 import com.example.readmymi.ui.HistoryScreen
@@ -164,10 +162,7 @@ fun MainScreen(viewModel: MainViewModel) {
         return
     }
 
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
-
     Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             if (!showSettings) {
                 TopAppBar(
@@ -232,8 +227,7 @@ fun MainScreen(viewModel: MainViewModel) {
                         scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
                         titleContentColor = MaterialTheme.colorScheme.onSurface,
                         actionIconContentColor = MaterialTheme.colorScheme.onSurface
-                    ),
-                    scrollBehavior = scrollBehavior
+                    )
                 )
             }
         }

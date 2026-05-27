@@ -72,7 +72,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun restartService() {
         viewModelScope.launch {
             stopService()
-            kotlinx.coroutines.delay(1000)
+            kotlinx.coroutines.delay(3000)
             startService()
         }
     }

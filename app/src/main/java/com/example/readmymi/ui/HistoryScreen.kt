@@ -27,6 +27,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlin.math.roundToInt
+import com.example.readmymi.ui.getTimeFilterBounds
+import com.example.readmymi.ui.getTimeBucketSize
 
 // Simple ViewModel usage for query, or just use direct flow in composable for simplicity given no DI setup
 // We will access DB from context directly here for simplicity as per existing pattern
@@ -44,21 +46,8 @@ fun HistoryScreen(
     var timeFilter by remember { mutableStateOf(0) }
     
     val endTime = System.currentTimeMillis()
-    val startTime = when(timeFilter) {
-        0 -> endTime - 24 * 60 * 60 * 1000L // 1 Day
-        1 -> endTime - 7L * 24 * 60 * 60 * 1000L // 7 Days / Week
-        2 -> endTime - 30L * 24 * 60 * 60 * 1000L // 30 Days / Month
-        3 -> endTime - 180L * 24 * 60 * 60 * 1000L // 6 Months
-        else -> endTime - 24 * 60 * 60 * 1000L
-    }
-
-    val bucketSize = when(timeFilter) {
-        0 -> 10 * 60 * 1000L // 10 mins
-        1 -> 1 * 60 * 60 * 1000L // 1 hour (Week)
-        2 -> 4 * 60 * 60 * 1000L // 4 hours
-        3 -> 24 * 60 * 60 * 1000L // 1 day
-        else -> 10 * 60 * 1000L
-    }
+    val (startTime, _) = getTimeFilterBounds(timeFilter, endTime)
+    val bucketSize = getTimeBucketSize(timeFilter)
 
     // Collect Data and aggregate into time buckets to eliminate zigzags and overlapping duplicates
     val historyFlow = remember(macAddress, startTime, endTime, bucketSize) {

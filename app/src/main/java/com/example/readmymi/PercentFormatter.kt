@@ -2,21 +2,27 @@ package com.example.readmymi
 
 import java.text.NumberFormat
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 object PercentFormatter {
     private const val NBSP = "\u00A0"
+    private val numberFormatCache = ConcurrentHashMap<Pair<Locale, Int>, NumberFormat>()
 
     fun format(value: Double, decimals: Int = 1, locale: Locale = Locale.getDefault()): String {
-        val number = NumberFormat.getNumberInstance(locale).apply {
-            minimumFractionDigits = decimals
-            maximumFractionDigits = decimals
+        val number = numberFormatCache.getOrPut(locale to decimals) {
+            NumberFormat.getNumberInstance(locale).apply {
+                minimumFractionDigits = decimals
+                maximumFractionDigits = decimals
+            }
         }.format(value)
 
         return formatNumber(number, locale)
     }
 
     fun format(value: Int, locale: Locale = Locale.getDefault()): String {
-        val number = NumberFormat.getIntegerInstance(locale).format(value)
+        val number = numberFormatCache.getOrPut(locale to -1) {
+            NumberFormat.getIntegerInstance(locale)
+        }.format(value)
         return formatNumber(number, locale)
     }
 

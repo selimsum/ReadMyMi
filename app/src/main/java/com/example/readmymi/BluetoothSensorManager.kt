@@ -30,6 +30,24 @@ import kotlinx.coroutines.Dispatchers
 
 class BluetoothSensorManager(private val context: Context) {
 
+    companion object {
+        private const val SERVICE_UUID = "00001f10-0000-1000-8000-00805f9b34fb"
+        private const val CHAR_UUID = "00001f1f-0000-1000-8000-00805f9b34fb"
+        private const val DESC_UUID = "00002902-0000-1000-8000-00805f9b34fb"
+        private const val XIAOMI_SERVICE_PREFIX = "0000fe95-0000-1000-8000-00805f9b34fb"
+        private const val BTHOME_SERVICE_PREFIX = "0000fcd2-0000-1000-8000-00805f9b34fb"
+        private const val ENV_SENSING_PREFIX = "0000181a-0000-1000-8000-00805f9b34fb"
+        private val uuidFilters: List<ScanFilter> by lazy {
+            listOf("fe95", "fcd2", "181a").flatMap { uuid ->
+                val parcelUuid = ParcelUuid.fromString("0000$uuid-0000-1000-8000-00805f9b34fb")
+                listOf(
+                    ScanFilter.Builder().setServiceUuid(parcelUuid).build(),
+                    ScanFilter.Builder().setServiceData(parcelUuid, byteArrayOf()).build()
+                )
+            }
+        }
+    }
+
     private val bluetoothManager: BluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager.adapter
     private val scanner: BluetoothLeScanner?
@@ -79,11 +97,7 @@ class BluetoothSensorManager(private val context: Context) {
         if (!targetMac.isNullOrEmpty() && try { BluetoothAdapter.checkBluetoothAddress(targetMac) } catch (e: IllegalArgumentException) { false }) {
             filters.add(ScanFilter.Builder().setDeviceAddress(targetMac).build())
         } else {
-            listOf("fe95", "fcd2", "181a").forEach { uuid ->
-                val parcelUuid = ParcelUuid.fromString("0000$uuid-0000-1000-8000-00805f9b34fb")
-                filters.add(ScanFilter.Builder().setServiceUuid(parcelUuid).build())
-                filters.add(ScanFilter.Builder().setServiceData(parcelUuid, byteArrayOf()).build())
-            }
+            filters.addAll(uuidFilters)
         }
 
         val settings = ScanSettings.Builder()
@@ -120,7 +134,7 @@ class BluetoothSensorManager(private val context: Context) {
         val completion = kotlinx.coroutines.CompletableDeferred<Boolean>()
         
         val gattCallback = object : BluetoothGattCallback() {
-            private var writeStep = 0
+            private val writeStep = java.util.concurrent.atomic.AtomicInteger(0)
 
             override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
@@ -132,11 +146,11 @@ class BluetoothSensorManager(private val context: Context) {
 
             override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
                 if (status == BluetoothGatt.GATT_SUCCESS) {
-                    val service = g.getService(UUID.fromString("00001f10-0000-1000-8000-00805f9b34fb"))
-                    val char = service?.getCharacteristic(UUID.fromString("00001f1f-0000-1000-8000-00805f9b34fb"))
+                    val service = g.getService(UUID.fromString(SERVICE_UUID))
+                    val char = service?.getCharacteristic(UUID.fromString(CHAR_UUID))
                     if (char != null) {
                         g.setCharacteristicNotification(char, true)
-                        val desc = char.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"))
+                        val desc = char.getDescriptor(UUID.fromString(DESC_UUID))
                         desc.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
                         g.writeDescriptor(desc)
                     } else {
@@ -148,26 +162,26 @@ class BluetoothSensorManager(private val context: Context) {
             }
              
             override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor?, status: Int) {
-                val char = g.getService(UUID.fromString("00001f10-0000-1000-8000-00805f9b34fb"))
-                    ?.getCharacteristic(UUID.fromString("00001f1f-0000-1000-8000-00805f9b34fb")) ?: return
+                val char = g.getService(UUID.fromString(SERVICE_UUID))
+                    ?.getCharacteristic(UUID.fromString(CHAR_UUID)) ?: return
                 
                 val currentTime = (System.currentTimeMillis() / 1000).toInt()
                 val timeCmd = ByteArray(5).apply {
                     this[0] = 0x23.toByte()
                     System.arraycopy(java.nio.ByteBuffer.allocate(4).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(currentTime).array(), 0, this, 1, 4)
                 }
-                writeStep = 1
+                writeStep.set(1)
                 writeCharacteristic(g, char, timeCmd)
              }
 
             override fun onCharacteristicWrite(g: BluetoothGatt, char: BluetoothGattCharacteristic?, status: Int) {
-                if (status == BluetoothGatt.GATT_SUCCESS && writeStep == 1) {
+                if (status == BluetoothGatt.GATT_SUCCESS && writeStep.get() == 1) {
                      val cmd = ByteArray(5).apply {
                         this[0] = 0x35.toByte()
                         this[1] = (records and 0xFF).toByte()
                         this[2] = ((records shr 8) and 0xFF).toByte()
                      }
-                     writeStep = 2
+                     writeStep.set(2)
                      writeCharacteristic(g, char!!, cmd)
                 }
             }
@@ -254,8 +268,8 @@ class BluetoothSensorManager(private val context: Context) {
 
             override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
                 if (status == BluetoothGatt.GATT_SUCCESS) {
-                    val service = g.getService(UUID.fromString("00001f10-0000-1000-8000-00805f9b34fb"))
-                    val char = service?.getCharacteristic(UUID.fromString("00001f1f-0000-1000-8000-00805f9b34fb"))
+                    val service = g.getService(UUID.fromString(SERVICE_UUID))
+                    val char = service?.getCharacteristic(UUID.fromString(CHAR_UUID))
                     if (char != null) {
                         val currentTime = (System.currentTimeMillis() / 1000).toInt()
                         val timeCmd = ByteArray(5).apply {

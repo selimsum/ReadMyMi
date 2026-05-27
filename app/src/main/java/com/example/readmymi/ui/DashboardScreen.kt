@@ -27,6 +27,7 @@ import com.example.readmymi.data.SensorDatabase
 import com.example.readmymi.data.SensorEntity
 import java.text.SimpleDateFormat
 import java.util.*
+import com.example.readmymi.ui.getTimeFilterBounds
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -194,12 +195,7 @@ fun HistoryChartCard(macAddress: String, database: SensorDatabase) {
 
     var timeFilter by remember { mutableStateOf(0) }
     val endTime = System.currentTimeMillis()
-    val startTime = when(timeFilter) {
-        0 -> endTime - 24 * 60 * 60 * 1000L
-        1 -> endTime - 7L * 24 * 60 * 60 * 1000L
-        2 -> endTime - 30L * 24 * 60 * 60 * 1000L
-        else -> endTime - 180L * 24 * 60 * 60 * 1000L
-    }
+    val (startTime, _) = getTimeFilterBounds(timeFilter, endTime)
     
     val historyData by database.sensorDao().getHistory(macAddress, startTime, endTime).collectAsState(initial = emptyList())
     

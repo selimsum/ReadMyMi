@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.example.readmymi.data.AppDatabase
+import com.example.readmymi.data.SensorDatabase
 import com.example.readmymi.data.SensorDao
 import com.example.readmymi.data.SensorEntity
 import kotlinx.coroutines.runBlocking
@@ -17,13 +17,13 @@ import kotlin.system.measureTimeMillis
 @RunWith(AndroidJUnit4::class)
 class SensorDaoBenchmarkTest {
 
-    private lateinit var db: AppDatabase
+    private lateinit var db: SensorDatabase
     private lateinit var dao: SensorDao
 
     @Before
     fun createDb() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
+        db = Room.inMemoryDatabaseBuilder(context, SensorDatabase::class.java).build()
         dao = db.sensorDao()
     }
 

@@ -196,7 +196,8 @@ object SensorParser {
             deviceName = name,
             temperature = Math.round(temp * ROUNDING_MULTIPLIER) / ROUNDING_MULTIPLIER,
             humidity = Math.round(hum * ROUNDING_MULTIPLIER) / ROUNDING_MULTIPLIER,
-            battery = batt
+            battery = batt,
+            timestamp = System.currentTimeMillis()
         )
     }
 }

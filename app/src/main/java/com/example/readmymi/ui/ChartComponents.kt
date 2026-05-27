@@ -19,6 +19,7 @@ import com.example.readmymi.data.SensorEntity
 import java.util.Date
 import java.util.Locale
 import java.text.SimpleDateFormat
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 @Composable
@@ -60,7 +61,7 @@ fun SensorChart(
 
             val pointsData = sampledData.mapIndexed { index, item ->
                 val yRaw = if (isTemperature) {
-                    com.example.readmymi.TemperatureConverter.convert(item.temperature, tempUnit)
+                    com.example.readmymi.TemperatureConverter.convert(item.temperature.toDouble(), tempUnit).toFloat()
                 } else {
                     item.humidity.toFloat()
                 }
@@ -79,10 +80,10 @@ fun SensorChart(
             // allowing the user to tap above/below points or slide finger to read data.
             chartView.setOnTouchListener { v, event ->
                 val parent = v.parent
-                parent?.requestDisallowInterceptTouchEvent(true) // Prevent parent scroll while scrubbing
 
                 if (event.action == android.view.MotionEvent.ACTION_DOWN || 
                     event.action == android.view.MotionEvent.ACTION_MOVE) {
+                    parent?.requestDisallowInterceptTouchEvent(true)
                     
                     val chart = v as Chart
                     val computator = chart.chartComputator
@@ -90,28 +91,18 @@ fun SensorChart(
                     val viewport = computator.visibleViewport
                     
                     if (contentRect.width() > 0 && viewport.width() > 0) {
-                        // Map X pixel -> X Value (Index)
                         val x = event.x.coerceIn(contentRect.left.toFloat(), contentRect.right.toFloat())
                         val relativeX = (x - contentRect.left) / contentRect.width()
                         val valueX = viewport.left + (relativeX * viewport.width())
                         
-                        // Find point closest to valueX
-                        var nearestIndex = 0
-                        var minDiff = Float.MAX_VALUE
-                        for (i in pointsData.indices) {
-                            val diff = Math.abs(pointsData[i].x - valueX)
-                            if (diff < minDiff) {
-                                minDiff = diff
-                                nearestIndex = i
-                            }
-                        }
+                        val nearestIndex = binarySearchClosest(pointsData, valueX)
                         
-                        // Select the point programmatically
                         chart.selectValue(SelectedValue(0, nearestIndex, SelectedValue.SelectedValueType.LINE))
                     }
-                    true // Consume event to prevent conflict with built-in scroll/zoom and force Scrub behavior
+                    true
                 } else if (event.action == android.view.MotionEvent.ACTION_UP || 
                            event.action == android.view.MotionEvent.ACTION_CANCEL) {
+                    parent?.requestDisallowInterceptTouchEvent(false)
                     true
                 } else {
                     false
@@ -188,4 +179,22 @@ fun SensorChart(
             chartView.lineChartData = chartData
         }
     )
+}
+
+private fun binarySearchClosest(points: List<PointValue>, targetX: Float): Int {
+    if (points.isEmpty()) return 0
+    var low = 0
+    var high = points.size - 1
+    if (targetX <= points[low].x) return low
+    if (targetX >= points[high].x) return high
+    while (low <= high) {
+        val mid = (low + high) ushr 1
+        val midX = points[mid].x
+        when {
+            targetX < midX -> high = mid - 1
+            targetX > midX -> low = mid + 1
+            else -> return mid
+        }
+    }
+    return if (abs(points[low].x - targetX) < abs(points[high].x - targetX)) low else high
 }

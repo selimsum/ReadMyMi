@@ -36,6 +36,7 @@ class SensorForegroundService : Service() {
         private const val HISTORY_RECORD_INTERVAL_MS = 10 * 60 * 1000L
         private const val DEFAULT_HISTORY_RECORDS = 70
         private const val MAX_HISTORY_RECORDS = 512
+        @Volatile
         var isServiceRunning = false
         val liveSensorData = kotlinx.coroutines.flow.MutableStateFlow<SensorData?>(null)
         val serviceStatus = kotlinx.coroutines.flow.MutableStateFlow("Initializing...")
@@ -121,32 +122,8 @@ class SensorForegroundService : Service() {
     
     private fun startForegroundService() {
         createNotificationChannel()
-        val notificationIntent = Intent(this, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(
-            this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val channelId = if (prefs.ongoingNotificationEnabled) CHANNEL_ID else CHANNEL_SILENT_ID
-        val priority = if (prefs.ongoingNotificationEnabled) {
-            NotificationCompat.PRIORITY_LOW
-        } else {
-            NotificationCompat.PRIORITY_MIN
-        }
-
-        val notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Read My Mi Scanner")
-            .setContentText("Running...")
-            .setSmallIcon(R.drawable.ic_app_logo_png)
-            .setContentIntent(pendingIntent)
-            .setSilent(true)
-            .setPriority(priority)
-            .build()
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
-        }
+        val notification = buildOngoingNotification("Read My Mi Scanner", "Running...")
+        startForegroundCompat(notification)
     }
 
     private fun createNotificationChannel() {
@@ -264,8 +241,7 @@ class SensorForegroundService : Service() {
     }
 
     private fun sendAlertNotification(id: Int, title: String, text: String) {
-        val notificationIntent = Intent(this, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE)
+        val pendingIntent = createPendingIntent()
         val notification = NotificationCompat.Builder(this, ALERTS_CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(text)
@@ -430,24 +406,22 @@ class SensorForegroundService : Service() {
         return estimatedRecords.coerceIn(1, MAX_HISTORY_RECORDS)
     }
 
-    private fun saveHistoryToDb(history: List<SensorData>) {
+    private suspend fun saveHistoryToDb(history: List<SensorData>) {
         if (history.isEmpty()) return
         AppLogger.log("Service", "Saving ${history.size} history records...")
-        serviceScope.launch(Dispatchers.IO) {
-            try {
-                val entities = history.map { record ->
-                    SensorEntity(
-                        macAddress = record.macAddress,
-                        temperature = record.temperature.toFloat(),
-                        humidity = record.humidity.toInt(),
-                        battery = record.battery,
-                        timestamp = record.timestamp
-                    )
-                }
-                database.sensorDao().insertAll(entities)
-            } catch (e: Exception) {
-                AppLogger.log("Service", "Failed to save history: ${e.message}")
+        try {
+            val entities = history.map { record ->
+                SensorEntity(
+                    macAddress = record.macAddress,
+                    temperature = record.temperature.toFloat(),
+                    humidity = record.humidity.toInt(),
+                    battery = record.battery,
+                    timestamp = record.timestamp
+                )
             }
+            database.sensorDao().insertAll(entities)
+        } catch (e: Exception) {
+            AppLogger.log("Service", "Failed to save history: ${e.message}")
         }
     }
 
@@ -461,27 +435,34 @@ class SensorForegroundService : Service() {
     }
 
     private fun updateNotification(title: String, text: String) {
-        val notificationIntent = Intent(this, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(
-            this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE
-        )
+        val notification = buildOngoingNotification(title, text)
+        startForegroundCompat(notification)
+    }
 
+    private fun buildOngoingNotification(title: String, text: String): Notification {
+        val pendingIntent = createPendingIntent()
         val channelId = if (prefs.ongoingNotificationEnabled) CHANNEL_ID else CHANNEL_SILENT_ID
         val priority = if (prefs.ongoingNotificationEnabled) {
             NotificationCompat.PRIORITY_LOW
         } else {
             NotificationCompat.PRIORITY_MIN
         }
-
-        val notification = NotificationCompat.Builder(this, channelId)
+        return NotificationCompat.Builder(this, channelId)
             .setContentTitle(title)
             .setContentText(text)
             .setSmallIcon(R.drawable.ic_app_logo_png)
             .setContentIntent(pendingIntent)
-            .setSilent(true) // Don't beep on every update
+            .setSilent(true)
             .setPriority(priority)
             .build()
+    }
 
+    private fun createPendingIntent(): PendingIntent {
+        val notificationIntent = Intent(this, MainActivity::class.java)
+        return PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE)
+    }
+
+    private fun startForegroundCompat(notification: Notification) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         } else {
