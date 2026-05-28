@@ -84,12 +84,12 @@ fun SettingsScreen(
         val highC = prefs.alertTempHigh
         val lowC = prefs.alertTempLow
         alertTempHigh = if (tempUnit == "F") {
-            String.format(Locale.US, "%.1f", TemperatureConverter.convert(highC, "F"))
+            String.format(Locale.US, "%.1f", TemperatureConverter.convert(highC.toDouble(), "F"))
         } else {
             String.format(Locale.US, "%.1f", highC)
         }
         alertTempLow = if (tempUnit == "F") {
-            String.format(Locale.US, "%.1f", TemperatureConverter.convert(lowC, "F"))
+            String.format(Locale.US, "%.1f", TemperatureConverter.convert(lowC.toDouble(), "F"))
         } else {
             String.format(Locale.US, "%.1f", lowC)
         }
