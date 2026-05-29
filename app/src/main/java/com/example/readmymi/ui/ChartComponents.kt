@@ -42,7 +42,7 @@ fun SensorChart(
         factory = { context ->
             LineChartView(context).apply {
                 isInteractive = true
-                zoomType = ZoomType.HORIZONTAL
+                zoomType = ZoomType.HORIZONTAL_AND_VERTICAL
                 setContainerScrollEnabled(true, ContainerScrollType.HORIZONTAL)
                 isValueSelectionEnabled = true
             }
@@ -80,6 +80,10 @@ fun SensorChart(
             // allowing the user to tap above/below points or slide finger to read data.
             chartView.setOnTouchListener { v, event ->
                 val parent = v.parent
+
+                if (event.pointerCount > 1) {
+                    return@setOnTouchListener false
+                }
 
                 if (event.action == android.view.MotionEvent.ACTION_DOWN || 
                     event.action == android.view.MotionEvent.ACTION_MOVE) {

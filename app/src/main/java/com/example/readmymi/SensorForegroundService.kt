@@ -428,10 +428,8 @@ class SensorForegroundService : Service() {
     private fun updateLiveNotification(it: SensorData) {
         val tempStr = String.format(java.util.Locale.GERMANY, "%.1f", it.temperature)
         val humStr = PercentFormatter.format(it.humidity)
-        val lastUpdate = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
-            .format(java.util.Date(it.timestamp))
         val devName = prefs.getDeviceName(it.macAddress)
-        updateNotification(devName, "🌡 ${tempStr}°C   💧 $humStr   🕒 $lastUpdate")
+        updateNotification(devName, "🌡 ${tempStr}°C   💧 $humStr")
     }
 
     private fun updateNotification(title: String, text: String) {
