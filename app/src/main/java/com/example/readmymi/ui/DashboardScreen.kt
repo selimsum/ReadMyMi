@@ -25,9 +25,12 @@ import com.example.readmymi.PrefsManager
 import com.example.readmymi.SensorData
 import com.example.readmymi.data.SensorDatabase
 import com.example.readmymi.data.SensorEntity
-import java.text.SimpleDateFormat
-import java.util.*
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import com.example.readmymi.ui.getTimeFilterBounds
+
+private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,7 +102,7 @@ fun SensorMainCard(
     val isHappy = tempOk && humidityOk
     val isOnline = isServiceRunning && !prefs.getWasOffline(data.macAddress)
     val lastUpdateTime = remember(data.timestamp) {
-        SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(data.timestamp))
+        timeFormatter.format(Instant.ofEpochMilli(data.timestamp))
     }
     val nextUpdateTime = remember(serviceStatus, data.timestamp, prefs.scanIntervalSeconds) {
         getNextUpdateTime(serviceStatus, data.timestamp, prefs.scanIntervalSeconds)
@@ -172,7 +175,7 @@ private fun getNextUpdateTime(serviceStatus: String, lastReadingTimestamp: Long,
         lastReadingTimestamp + scanIntervalSeconds.coerceAtLeast(30) * 1000L
     }
 
-    return SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(nextUpdateMillis))
+    return timeFormatter.format(Instant.ofEpochMilli(nextUpdateMillis))
 }
 
 @Composable
