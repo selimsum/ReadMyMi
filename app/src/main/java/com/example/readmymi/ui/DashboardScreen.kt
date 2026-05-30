@@ -29,6 +29,8 @@ import java.text.SimpleDateFormat
 import java.util.*
 import com.example.readmymi.ui.getTimeFilterBounds
 
+private val sleepingRegex = Regex("""Sleeping\.\.\. \((\d+)s\)""")
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
@@ -160,7 +162,7 @@ fun SensorMainCard(
 }
 
 private fun getNextUpdateTime(serviceStatus: String, lastReadingTimestamp: Long, scanIntervalSeconds: Int): String {
-    val remainingSeconds = Regex("""Sleeping\.\.\. \((\d+)s\)""")
+    val remainingSeconds = sleepingRegex
         .find(serviceStatus)
         ?.groupValues
         ?.getOrNull(1)
