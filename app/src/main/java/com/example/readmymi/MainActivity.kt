@@ -1,3 +1,4 @@
+@file:Suppress("UnusedImport")
 package com.example.readmymi
 
 import android.Manifest
