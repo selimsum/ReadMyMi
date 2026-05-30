@@ -382,8 +382,10 @@ class SensorForegroundService : Service() {
                     AppLogger.log("Service", "Syncing history ($mode). Downloading up to $recordsToDownload records...")
                     val history = bluetoothSensorManager.downloadHistory(mac, records = recordsToDownload) { AppLogger.log("BLE", it) }
                     val missingHistory = history
+                        .asSequence()
                         .filter { it.timestamp > missingSince && it.timestamp <= now }
                         .distinctBy { it.timestamp }
+                        .toList()
                         .sortedBy { it.timestamp }
 
                     if (missingHistory.isNotEmpty()) {
