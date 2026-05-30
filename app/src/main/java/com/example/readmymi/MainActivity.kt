@@ -7,7 +7,6 @@ import android.os.Bundle
 import androidx.lifecycle.lifecycleScope
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import java.util.Locale
