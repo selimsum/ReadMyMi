@@ -11,4 +11,9 @@ data class SensorEntity(
     val humidity: Int,
     val battery: Int,
     val timestamp: Long
-)
+) {
+    companion object {
+        // 10-minute bucket in ms for deduplication
+        const val BUCKET_MS = 600000L
+    }
+}

@@ -356,7 +356,7 @@ class SensorForegroundService : Service() {
         if (mode == "off") {
             return
         }
-        
+
         val now = System.currentTimeMillis()
         if (mode == "start") {
             if (historyCheckedMap.containsKey(mac)) {
@@ -381,14 +381,17 @@ class SensorForegroundService : Service() {
                     val recordsToDownload = estimateHistoryRecordCount(missingDuration, latestDbTimestamp == null)
                     AppLogger.log("Service", "Syncing history ($mode). Downloading up to $recordsToDownload records...")
                     val history = bluetoothSensorManager.downloadHistory(mac, records = recordsToDownload) { AppLogger.log("BLE", it) }
+
                     val missingHistory = history
-                        .filter { it.timestamp > missingSince && it.timestamp <= now }
+                        .filter { it.timestamp > missingSince }
                         .distinctBy { it.timestamp }
                         .sortedBy { it.timestamp }
 
                     if (missingHistory.isNotEmpty()) {
                         saveHistoryToDb(missingHistory)
-                        prefs.setLastHistorySyncTimestamp(mac, now)
+                        // Update sync timestamp to the latest record we saved, not "now"
+                        val latestSavedTimestamp = missingHistory.maxOf { it.timestamp }
+                        prefs.setLastHistorySyncTimestamp(mac, latestSavedTimestamp)
                     } else {
                         AppLogger.log("Service", "No missing history records found on device.")
                         prefs.setLastHistorySyncTimestamp(mac, now)
@@ -402,7 +405,9 @@ class SensorForegroundService : Service() {
 
     private fun estimateHistoryRecordCount(missingDuration: Long, isInitialSync: Boolean): Int {
         if (isInitialSync) return DEFAULT_HISTORY_RECORDS
-        val estimatedRecords = (missingDuration / HISTORY_RECORD_INTERVAL_MS).toInt() + 2
+        // Add significant buffer to ensure we fetch enough records to cover the gap,
+        // especially after a long disconnection where device may have stored more than expected.
+        val estimatedRecords = (missingDuration / HISTORY_RECORD_INTERVAL_MS).toInt() + 10
         return estimatedRecords.coerceIn(1, MAX_HISTORY_RECORDS)
     }
 
