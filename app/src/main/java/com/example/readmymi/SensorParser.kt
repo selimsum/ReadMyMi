@@ -1,6 +1,5 @@
 package com.example.readmymi
 
-import android.util.Log
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -52,7 +51,6 @@ object SensorParser {
                     return parsed
                 }
             } catch (e: Exception) {
-                Log.e("SensorParser", "Error parsing $deviceName ($macAddress): ${e.message}")
                 AppLogger.log("Parser", "ERROR parsing $deviceName ($macAddress) via UUID $uuidString (raw: $hexData): ${e.message}")
             }
         }

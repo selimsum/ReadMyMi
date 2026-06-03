@@ -10,7 +10,6 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -70,7 +69,7 @@ class SensorForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d("SensorService", "onStartCommand: action=${intent?.action}")
+        AppLogger.log("SensorService", "onStartCommand: action=${intent?.action}")
         if (intent?.action == "STOP_SCAN") {
             isServiceRunning = false
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -110,7 +109,6 @@ class SensorForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        Log.d("SensorService", "Service Created")
         AppLogger.log("Service", "Service Created")
 
         // Acquire WakeLock for reliable background scanning
@@ -492,7 +490,7 @@ class SensorForegroundService : Service() {
                     ))
                     lastDbSaveMap[it.macAddress] = now
                 } catch (e: Exception) {
-                    Log.e("SensorService", "DB Save Error", e)
+                    AppLogger.log("SensorService", "DB Save Error: ${e.message}")
                 }
             }
         }
