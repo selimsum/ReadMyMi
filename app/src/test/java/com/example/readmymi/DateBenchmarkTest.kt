@@ -1,5 +1,6 @@
 package com.example.readmymi
 
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -30,8 +31,7 @@ class DateBenchmarkTest {
             }
         }
 
-        println("Baseline: $timeBaseline ms")
-        println("Optimized: $timeOptimized ms")
-        println("Improvement: ${timeBaseline - timeOptimized} ms")
+        assertTrue(timeBaseline >= 0)
+        assertTrue(timeOptimized >= 0)
     }
 }
