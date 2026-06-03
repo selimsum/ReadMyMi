@@ -55,10 +55,19 @@ fun HistoryScreen(
             .map { list ->
                 list.groupBy { it.timestamp / bucketSize }
                     .map { (_, group) ->
+                        var sumTemp = 0.0
+                        var sumHum = 0.0
+                        var sumTime = 0.0
+                        for (item in group) {
+                            sumTemp += item.temperature
+                            sumHum += item.humidity
+                            sumTime += item.timestamp
+                        }
+                        val size = group.size
                         group.first().copy(
-                            temperature = Math.round(group.map { it.temperature }.average() * 100) / 100f,
-                            humidity = group.map { it.humidity }.average().roundToInt(),
-                            timestamp = group.map { it.timestamp }.average().toLong()
+                            temperature = Math.round((sumTemp / size) * 100) / 100f,
+                            humidity = (sumHum / size).roundToInt(),
+                            timestamp = (sumTime / size).toLong()
                         )
                     }
                     .sortedBy { it.timestamp }
