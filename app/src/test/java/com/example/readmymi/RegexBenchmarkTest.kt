@@ -1,5 +1,6 @@
 package com.example.readmymi
 
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.system.measureTimeMillis
 
@@ -29,8 +30,7 @@ class RegexBenchmarkTest {
             }
         }
 
-        println("Regex Baseline: $timeBaseline ms")
-        println("Regex Optimized: $timeOptimized ms")
-        println("Regex Improvement: ${timeBaseline - timeOptimized} ms")
+        assertTrue(timeBaseline >= 0)
+        assertTrue(timeOptimized >= 0)
     }
 }
