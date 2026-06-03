@@ -19,6 +19,9 @@ import com.example.readmymi.data.SensorEntity
 import java.util.Date
 import java.util.Locale
 import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -59,6 +62,8 @@ fun SensorChart(
             val maxTime = if (sampledData.isNotEmpty()) sampledData.last().timestamp else 0L
             val duration = maxTime - minTime
 
+            val timeFormatter = DateTimeFormatter.ofPattern("dd/MM HH:mm", Locale.getDefault()).withZone(ZoneId.systemDefault())
+
             val pointsData = sampledData.mapIndexed { index, item ->
                 val yRaw = if (isTemperature) {
                     com.example.readmymi.TemperatureConverter.convert(item.temperature.toDouble(), tempUnit).toFloat()
@@ -71,7 +76,7 @@ fun SensorChart(
                     index.toFloat()
                 }
                 val unit = if (isTemperature) (if (tempUnit == "F") "°F" else "°C") else "%"
-                val timeStr = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(Date(item.timestamp))
+                val timeStr = timeFormatter.format(Instant.ofEpochMilli(item.timestamp))
                 val labelText = "${String.format(Locale.getDefault(), "%.1f", yRaw)}$unit ($timeStr)"
                 PointValue(xRaw, yRaw).setLabel(labelText.toCharArray())
             }
