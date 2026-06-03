@@ -27,6 +27,7 @@ import android.os.Build
 import androidx.core.app.ActivityCompat
 import android.Manifest
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 
 class BluetoothSensorManager(private val context: Context) {
 
@@ -222,7 +223,7 @@ class BluetoothSensorManager(private val context: Context) {
         
         try {
             kotlinx.coroutines.withTimeout(60000) { completion.await() }
-        } catch (e: Exception) {
+        } catch (e: TimeoutCancellationException) {
             Log.e("BluetoothSensorManager", "Download timeout", e)
         } finally {
              gatt?.disconnect()
@@ -295,7 +296,7 @@ class BluetoothSensorManager(private val context: Context) {
         
         try {
             kotlinx.coroutines.withTimeout(15000) { completion.await() }
-        } catch (e: Exception) {
+        } catch (e: TimeoutCancellationException) {
             false
         } finally {
             gatt.disconnect()
@@ -392,7 +393,7 @@ class BluetoothSensorManager(private val context: Context) {
 
         try {
             kotlinx.coroutines.withTimeout(30000) { completion.await() }
-        } catch (e: Exception) {
+        } catch (e: TimeoutCancellationException) {
             onLog("Timeout — ${e.message}")
         } finally {
             gatt?.disconnect()
