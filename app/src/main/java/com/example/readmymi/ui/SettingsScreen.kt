@@ -535,8 +535,10 @@ fun SettingsScreen(
                                     val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
                                     val csvBuilder = StringBuilder()
                                     csvBuilder.append("DateTime,Timestamp,MAC Address,Temperature(C),Temperature(F),Humidity(%),Battery(%)\n")
+                                    val dateObj = Date()
                                     for (item in history) {
-                                        val dateTime = sdf.format(Date(item.timestamp))
+                                        dateObj.time = item.timestamp
+                                        val dateTime = sdf.format(dateObj)
                                         val tempF = item.temperature * 1.8f + 32f
                                         csvBuilder.append("$dateTime,${item.timestamp},${item.macAddress},${item.temperature},$tempF,${item.humidity},${item.battery}\n")
                                     }
