@@ -1,16 +1,17 @@
 package com.example.readmymi.ui
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -23,15 +24,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.readmymi.data.SensorDatabase
 import com.example.readmymi.PrefsManager
-import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlin.math.roundToInt
 import com.example.readmymi.ui.getTimeFilterBounds
 import com.example.readmymi.ui.getTimeBucketSize
 
-// Simple ViewModel usage for query, or just use direct flow in composable for simplicity given no DI setup
-// We will access DB from context directly here for simplicity as per existing pattern
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(
     macAddress: String,
@@ -102,29 +100,16 @@ fun HistoryScreen(
         
         Spacer(modifier = Modifier.height(16.dp))
         
-        // Filter Buttons
-        Row(modifier = Modifier.fillMaxWidth()) {
-            FilterButton(text = "Day", selected = timeFilter == 0, onClick = { timeFilter = 0 }, modifier = Modifier.weight(1f))
-            Spacer(modifier = Modifier.width(4.dp))
-            FilterButton(text = "Week", selected = timeFilter == 1, onClick = { timeFilter = 1 }, modifier = Modifier.weight(1f))
-            Spacer(modifier = Modifier.width(4.dp))
-            FilterButton(text = "Month", selected = timeFilter == 2, onClick = { timeFilter = 2 }, modifier = Modifier.weight(1f))
-            Spacer(modifier = Modifier.width(4.dp))
-            FilterButton(text = "6 Mos", selected = timeFilter == 3, onClick = { timeFilter = 3 }, modifier = Modifier.weight(1f))
+        // Time filter – MD3 SegmentedButton
+        val filterLabels = listOf("Day", "Week", "Month", "6 Mos")
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            filterLabels.forEachIndexed { index, label ->
+                SegmentedButton(
+                    selected = timeFilter == index,
+                    onClick = { timeFilter = index },
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = filterLabels.size),
+                ) { Text(label) }
+            }
         }
-    }
-}
-
-@Composable
-fun FilterButton(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Button(
-        onClick = onClick,
-        modifier = modifier,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    ) {
-        Text(text)
     }
 }

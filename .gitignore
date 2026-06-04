@@ -26,6 +26,9 @@ obj/
 # VS Code
 .vscode/
 
+# Qoder
+.qoder/
+
 # Log files
 *.log
 

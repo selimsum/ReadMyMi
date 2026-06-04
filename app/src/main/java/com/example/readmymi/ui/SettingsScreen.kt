@@ -2,7 +2,6 @@ package com.example.readmymi.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,7 +13,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -153,7 +151,7 @@ fun SettingsScreen(
                     Box(
                         modifier = Modifier
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                            .background(MaterialTheme.colorScheme.surfaceContainer)
                     ) {
                         IconButton(onClick = onBack) {
                             Icon(
@@ -246,37 +244,18 @@ fun SettingsScreen(
                 Column {
                     Text("Temperature Display Unit", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        val isCelsius = tempUnit == "C"
-                        Button(
-                            onClick = {
-                                tempUnit = "C"
-                                prefs.tempUnit = "C"
-                            },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isCelsius) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (isCelsius) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        ) {
-                            Text("Celsius (°C)")
-                        }
-                        Button(
-                            onClick = {
-                                tempUnit = "F"
-                                prefs.tempUnit = "F"
-                            },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (!isCelsius) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (!isCelsius) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        ) {
-                            Text("Fahrenheit (°F)")
-                        }
+                    val isCelsius = tempUnit == "C"
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        SegmentedButton(
+                            selected = isCelsius,
+                            onClick = { tempUnit = "C"; prefs.tempUnit = "C" },
+                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                        ) { Text("Celsius (°C)") }
+                        SegmentedButton(
+                            selected = !isCelsius,
+                            onClick = { tempUnit = "F"; prefs.tempUnit = "F" },
+                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                        ) { Text("Fahrenheit (°F)") }
                     }
                 }
                 
@@ -313,29 +292,26 @@ fun SettingsScreen(
                 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Ongoing Status Notification", style = MaterialTheme.typography.bodyLarge)
-                        Text("Show service status in notification drawer", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Switch(
-                        checked = ongoingNotificationEnabled,
-                        onCheckedChange = {
-                            ongoingNotificationEnabled = it
-                            prefs.ongoingNotificationEnabled = it
-                            if (isServiceRunning) {
-                                val intent = Intent(context, SensorForegroundService::class.java).apply {
-                                    action = "UPDATE_NOTIFICATION"
+                ListItem(
+                    headlineContent = { Text("Ongoing Status Notification") },
+                    supportingContent = { Text("Show service status in notification drawer") },
+                    trailingContent = {
+                        Switch(
+                            checked = ongoingNotificationEnabled,
+                            onCheckedChange = {
+                                ongoingNotificationEnabled = it
+                                prefs.ongoingNotificationEnabled = it
+                                if (isServiceRunning) {
+                                    val intent = Intent(context, SensorForegroundService::class.java).apply {
+                                        action = "UPDATE_NOTIFICATION"
+                                    }
+                                    context.startService(intent)
                                 }
-                                context.startService(intent)
                             }
-                        }
-                    )
-                }
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
 
@@ -353,29 +329,27 @@ fun SettingsScreen(
                     Text("Alerts & Notifications", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
                 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("Enable Alerts System", style = MaterialTheme.typography.bodyLarge)
-                    Switch(checked = alertsEnabled, onCheckedChange = { alertsEnabled = it; prefs.alertsEnabled = it })
-                }
+                ListItem(
+                    headlineContent = { Text("Enable Alerts System") },
+                    trailingContent = {
+                        Switch(checked = alertsEnabled, onCheckedChange = { alertsEnabled = it; prefs.alertsEnabled = it })
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
                 
                 if (alertsEnabled) {
-                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Alert Vibration", style = MaterialTheme.typography.bodyLarge)
-                        Switch(checked = alertVibrationEnabled, onCheckedChange = { 
-                            alertVibrationEnabled = it
-                            prefs.alertVibrationEnabled = it
-                        })
-                    }
+                    ListItem(
+                        headlineContent = { Text("Alert Vibration") },
+                        trailingContent = {
+                            Switch(checked = alertVibrationEnabled, onCheckedChange = {
+                                alertVibrationEnabled = it
+                                prefs.alertVibrationEnabled = it
+                            })
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     
                     AlertThresholdRow(
                         label = "High Temperature (°$tempUnit)",
@@ -595,7 +569,7 @@ fun SettingsScreen(
                         Icon(Icons.Filled.ContentCopy, contentDescription = "Copy logs")
                     }
                 }
-                Box(modifier = Modifier.fillMaxWidth().height(200.dp).background(Color.Black.copy(0.05f)).padding(8.dp)) {
+                Box(modifier = Modifier.fillMaxWidth().height(200.dp).background(MaterialTheme.colorScheme.surfaceContainerLow).padding(8.dp)) {
                     LazyColumn {
                         items(logs) { log ->
                             Text(log, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
@@ -638,14 +612,13 @@ fun AlertThresholdRow(
     onValueChange: (String) -> Unit
 ) {
     Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(
-                checked = enabled,
-                onCheckedChange = onEnabledChange,
-                modifier = Modifier.padding(end = 8.dp)
-            )
-            Text(label, style = MaterialTheme.typography.bodyMedium)
-        }
+        ListItem(
+            headlineContent = { Text(label) },
+            trailingContent = {
+                Switch(checked = enabled, onCheckedChange = onEnabledChange)
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
         if (enabled) {
             OutlinedTextField(
                 value = value,
@@ -665,12 +638,13 @@ fun SettingsCard(spacing: Int = 16, content: @Composable ColumnScope.() -> Unit)
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(spacing.dp), content = content)
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun <T> DropdownSelector(
     label: String,
@@ -680,41 +654,32 @@ fun <T> DropdownSelector(
     onOptionSelected: (T) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-    Box(modifier = Modifier.fillMaxWidth()) {
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = Modifier.fillMaxWidth()
+    ) {
         OutlinedTextField(
             value = optionToString(selectedOption),
             onValueChange = {},
             readOnly = true,
             label = { Text(label) },
-            trailingIcon = {
-                IconButton(onClick = { expanded = !expanded }) {
-                    Icon(
-                        imageVector = if (expanded) Icons.Filled.ArrowDropUp else Icons.Filled.ArrowDropDown,
-                        contentDescription = "Toggle dropdown"
-                    )
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier.menuAnchor().fillMaxWidth()
         )
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .clickable { expanded = true }
-        )
-    }
-    DropdownMenu(
-        expanded = expanded,
-        onDismissRequest = { expanded = false },
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        options.forEach { option ->
-            DropdownMenuItem(
-                text = { Text(optionToString(option)) },
-                onClick = {
-                    onOptionSelected(option)
-                    expanded = false
-                }
-            )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(optionToString(option)) },
+                    onClick = {
+                        onOptionSelected(option)
+                        expanded = false
+                    }
+                )
+            }
         }
     }
 }

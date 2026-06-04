@@ -9,7 +9,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -49,7 +48,7 @@ fun AboutScreen(onBack: () -> Unit) {
                         modifier = Modifier
                             .padding(start = 8.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                            .background(MaterialTheme.colorScheme.surfaceContainer)
                     ) {
                         IconButton(onClick = onBack) {
                             Icon(
@@ -82,7 +81,7 @@ fun AboutScreen(onBack: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(24.dp))
             Text("Read My Mi", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("v1.5.0", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+            Text("v1.6.0", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             
             Spacer(modifier = Modifier.height(32.dp))
             
@@ -96,7 +95,7 @@ fun AboutScreen(onBack: () -> Unit) {
             Text(
                 "Disclaimer: This application is an independent, open-source tool and is not affiliated with, authorized, sponsored, or endorsed by Xiaomi Inc. or any of its affiliates. All Xiaomi trademarks and product names are the property of their respective owners.",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
@@ -106,7 +105,7 @@ fun AboutScreen(onBack: () -> Unit) {
             Text(
                 "vibe coded by Selim Şumlu",
                 style = MaterialTheme.typography.labelSmall,
-                color = Color.Gray.copy(alpha = 0.5f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.padding(bottom = 8.dp)
             )
         }

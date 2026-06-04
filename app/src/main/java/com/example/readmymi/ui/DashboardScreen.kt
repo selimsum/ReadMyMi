@@ -30,6 +30,8 @@ import java.time.format.DateTimeFormatter
 import java.time.Instant
 import java.time.ZoneId
 import com.example.readmymi.ui.getTimeFilterBounds
+import com.example.readmymi.ui.theme.successColor
+import com.example.readmymi.ui.theme.dangerColor
 
 private val sleepingRegex = Regex("""Sleeping\.\.\. \((\d+)s\)""")
 private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
@@ -58,7 +60,7 @@ fun DashboardScreen(
                 Text("Scanning for sensors...", style = MaterialTheme.typography.headlineSmall)
                 if (serviceStatus.isNotBlank() && serviceStatus != "Initializing...") {
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(serviceStatus, style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                    Text(serviceStatus, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -113,7 +115,6 @@ fun SensorMainCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(modifier = Modifier.padding(24.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(text = prefs.getDeviceName(data.macAddress), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Medium)
@@ -126,14 +127,14 @@ fun SensorMainCard(
                 Icon(
                     imageVector = if (isOnline) Icons.Filled.CheckCircle else Icons.Filled.CloudOff,
                     contentDescription = if (isOnline) "Online" else "Offline",
-                    tint = if (isOnline) Color(0xFF4CAF50) else Color(0xFFF44336),
+                    tint = if (isOnline) successColor() else dangerColor(),
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = "${if (isOnline) "Online" else "Offline"} · Last $lastUpdateTime · Next $nextUpdateTime",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2
                 )
             }
@@ -151,13 +152,13 @@ fun SensorMainCard(
             Icon(
                 imageVector = if (isHappy) Icons.Rounded.SentimentSatisfied else Icons.Rounded.SentimentDissatisfied,
                 contentDescription = if (isHappy) "Conditions OK" else "Conditions out of range",
-                tint = if (isHappy) Color(0xFF4CAF50) else Color(0xFFF44336),
+                tint = if (isHappy) successColor() else dangerColor(),
                 modifier = Modifier.size(36.dp)
             )
             
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 StatusItem(Icons.Filled.WaterDrop, PercentFormatter.format(data.humidity), "Humidity")
-                StatusItem(Icons.Filled.BatteryStd, PercentFormatter.format(data.battery), "Battery", color = if (data.battery < 20) Color.Red else MaterialTheme.colorScheme.primary)
+                StatusItem(Icons.Filled.BatteryStd, PercentFormatter.format(data.battery), "Battery", color = if (data.battery < 20) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
             }
             
         }
@@ -204,11 +205,19 @@ fun HistoryChartCard(macAddress: String, database: SensorDatabase) {
     
     val historyData by database.sensorDao().getHistory(macAddress, startTime, endTime).collectAsState(initial = emptyList())
     
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+    ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                listOf("Day", "Week", "Month", "6 Months").forEachIndexed { index, label ->
-                    FilterChip(selected = timeFilter == index, onClick = { timeFilter = index }, label = { Text(label) })
+            val chartFilters = listOf("Day", "Week", "Month", "6 Mos")
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                chartFilters.forEachIndexed { index, label ->
+                    SegmentedButton(
+                        selected = timeFilter == index,
+                        onClick = { timeFilter = index },
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = chartFilters.size),
+                    ) { Text(label) }
                 }
             }
             
@@ -218,7 +227,7 @@ fun HistoryChartCard(macAddress: String, database: SensorDatabase) {
                 SensorChart(historyData, isTemperature = false, tempUnit = tempUnit)
             } else {
                 Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                    Text("No history data", color = Color.Gray)
+                    Text("No history data", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }

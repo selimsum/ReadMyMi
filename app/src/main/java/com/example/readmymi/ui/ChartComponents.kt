@@ -10,6 +10,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.material3.MaterialTheme
+import com.example.readmymi.ui.theme.md_chartTemperature
+import com.example.readmymi.ui.theme.md_chartHumidity
 import lecho.lib.hellocharts.model.*
 import lecho.lib.hellocharts.view.LineChartView
 import lecho.lib.hellocharts.view.Chart
@@ -34,7 +36,7 @@ fun SensorChart(
 ) {
     if (data.isEmpty()) return
 
-    val themeColor = if (isTemperature) android.graphics.Color.parseColor("#FF5722") else android.graphics.Color.parseColor("#03A9F4")
+    val themeColor = if (isTemperature) md_chartTemperature.toArgb() else md_chartHumidity.toArgb()
     val labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
 
     AndroidView(
