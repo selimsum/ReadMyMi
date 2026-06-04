@@ -40,6 +40,7 @@ import java.util.Locale
 import com.example.readmymi.TemperatureConverter
 import com.example.readmymi.data.SensorDatabase
 import kotlinx.coroutines.launch
+import android.database.sqlite.SQLiteException
 import androidx.compose.foundation.layout.ColumnScope
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -111,7 +112,7 @@ fun SettingsScreen(
                             try {
                                 database.sensorDao().deleteAll()
                                 Toast.makeText(context, "Database cleared successfully", Toast.LENGTH_SHORT).show()
-                            } catch (e: Exception) {
+                            } catch (e: SQLiteException) {
                                 Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
                             }
                         }
