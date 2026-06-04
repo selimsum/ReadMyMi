@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -196,19 +197,18 @@ fun MainScreen(viewModel: MainViewModel) {
                         }
                     },
                     actions = {
-                        Box(
-                            modifier = Modifier
-                                .padding(end = 12.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                        androidx.compose.material3.FilledIconButton(
+                            onClick = { showSettings = !showSettings },
+                            modifier = Modifier.padding(end = 12.dp),
+                            colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            )
                         ) {
-                            IconButton(onClick = { showSettings = !showSettings }) {
-                                Icon(
-                                    imageVector = Icons.Default.Settings,
-                                    contentDescription = "Settings",
-                                    tint = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings"
+                            )
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
