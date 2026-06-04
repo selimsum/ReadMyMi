@@ -40,6 +40,12 @@ class SensorForegroundService : Service() {
         var isServiceRunning = false
         val liveSensorData = kotlinx.coroutines.flow.MutableStateFlow<SensorData?>(null)
         val serviceStatus = kotlinx.coroutines.flow.MutableStateFlow("Initializing...")
+
+        private val timeFormatter = object : ThreadLocal<java.text.SimpleDateFormat>() {
+            override fun initialValue(): java.text.SimpleDateFormat {
+                return java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+            }
+        }
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -383,8 +389,14 @@ class SensorForegroundService : Service() {
                     val history = bluetoothSensorManager.downloadHistory(mac, records = recordsToDownload) { AppLogger.log("BLE", it) }
 
                     val missingHistory = history
+<<<<<<< HEAD
                         .filter { it.timestamp > missingSince }
+=======
+                        .asSequence()
+                        .filter { it.timestamp > missingSince && it.timestamp <= now }
+>>>>>>> 949ab4baf58da49b865fe9334d60d74e99b7a707
                         .distinctBy { it.timestamp }
+                        .toList()
                         .sortedBy { it.timestamp }
 
                     if (missingHistory.isNotEmpty()) {
@@ -433,8 +445,9 @@ class SensorForegroundService : Service() {
     private fun updateLiveNotification(it: SensorData) {
         val tempStr = String.format(java.util.Locale.GERMANY, "%.1f", it.temperature)
         val humStr = PercentFormatter.format(it.humidity)
+        val lastUpdate = timeFormatter.get()?.format(java.util.Date(it.timestamp)) ?: ""
         val devName = prefs.getDeviceName(it.macAddress)
-        updateNotification(devName, "🌡 ${tempStr}°C   💧 $humStr")
+        updateNotification(devName, "🌡 ${tempStr}°C   💧 $humStr   🕒 $lastUpdate")
     }
 
     private fun updateNotification(title: String, text: String) {
