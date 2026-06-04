@@ -11,7 +11,6 @@ import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.os.ParcelUuid
-import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -74,12 +73,11 @@ class BluetoothSensorManager(private val context: Context) {
             
             if (data != null) {
                 _sensorDataFlow.value = data
-                Log.d("BluetoothSensorManager", "Parsed: $data")
+                AppLogger.log("BluetoothSensorManager", "Parsed: $data")
             }
         }
 
         override fun onScanFailed(errorCode: Int) {
-            Log.e("BluetoothSensorManager", "Scan failed: $errorCode")
             AppLogger.log("BLE", "Scan Failed: $errorCode")
             _isScanning.value = false
         }
@@ -224,7 +222,7 @@ class BluetoothSensorManager(private val context: Context) {
         try {
             kotlinx.coroutines.withTimeout(60000) { completion.await() }
         } catch (e: TimeoutCancellationException) {
-            Log.e("BluetoothSensorManager", "Download timeout", e)
+            AppLogger.log("BluetoothSensorManager", "Download timeout: ${e.message}")
         } finally {
              gatt?.disconnect()
              gatt?.close()
