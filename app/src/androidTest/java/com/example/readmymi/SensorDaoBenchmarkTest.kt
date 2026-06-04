@@ -7,6 +7,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.readmymi.data.SensorDatabase
 import com.example.readmymi.data.SensorDao
 import com.example.readmymi.data.SensorEntity
+import android.util.Log
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
@@ -55,7 +56,7 @@ class SensorDaoBenchmarkTest {
             dao.insertAll(records)
         }
 
-        println("BENCHMARK: Individual insert time: $timeIndividual ms")
-        println("BENCHMARK: Batch insert time: $timeBatch ms")
+        Log.d("SensorDaoBenchmark", "Individual insert time: $timeIndividual ms")
+        Log.d("SensorDaoBenchmark", "Batch insert time: $timeBatch ms")
     }
 }

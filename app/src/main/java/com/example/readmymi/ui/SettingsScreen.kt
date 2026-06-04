@@ -40,6 +40,7 @@ import java.util.Locale
 import com.example.readmymi.TemperatureConverter
 import com.example.readmymi.data.SensorDatabase
 import kotlinx.coroutines.launch
+import android.database.sqlite.SQLiteException
 import androidx.compose.foundation.layout.ColumnScope
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -111,7 +112,7 @@ fun SettingsScreen(
                             try {
                                 database.sensorDao().deleteAll()
                                 Toast.makeText(context, "Database cleared successfully", Toast.LENGTH_SHORT).show()
-                            } catch (e: Exception) {
+                            } catch (e: SQLiteException) {
                                 Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
                             }
                         }
@@ -535,8 +536,10 @@ fun SettingsScreen(
                                     val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
                                     val csvBuilder = StringBuilder()
                                     csvBuilder.append("DateTime,Timestamp,MAC Address,Temperature(C),Temperature(F),Humidity(%),Battery(%)\n")
+                                    val dateObj = Date()
                                     for (item in history) {
-                                        val dateTime = sdf.format(Date(item.timestamp))
+                                        dateObj.time = item.timestamp
+                                        val dateTime = sdf.format(dateObj)
                                         val tempF = item.temperature * 1.8f + 32f
                                         csvBuilder.append("$dateTime,${item.timestamp},${item.macAddress},${item.temperature},$tempF,${item.humidity},${item.battery}\n")
                                     }

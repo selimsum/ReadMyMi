@@ -10,7 +10,6 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +39,12 @@ class SensorForegroundService : Service() {
         var isServiceRunning = false
         val liveSensorData = kotlinx.coroutines.flow.MutableStateFlow<SensorData?>(null)
         val serviceStatus = kotlinx.coroutines.flow.MutableStateFlow("Initializing...")
+
+        private val timeFormatter = object : ThreadLocal<java.text.SimpleDateFormat>() {
+            override fun initialValue(): java.text.SimpleDateFormat {
+                return java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+            }
+        }
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -64,7 +69,7 @@ class SensorForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d("SensorService", "onStartCommand: action=${intent?.action}")
+        AppLogger.log("SensorService", "onStartCommand: action=${intent?.action}")
         if (intent?.action == "STOP_SCAN") {
             isServiceRunning = false
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -104,7 +109,6 @@ class SensorForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        Log.d("SensorService", "Service Created")
         AppLogger.log("Service", "Service Created")
 
         // Acquire WakeLock for reliable background scanning
@@ -382,8 +386,10 @@ class SensorForegroundService : Service() {
                     AppLogger.log("Service", "Syncing history ($mode). Downloading up to $recordsToDownload records...")
                     val history = bluetoothSensorManager.downloadHistory(mac, records = recordsToDownload) { AppLogger.log("BLE", it) }
                     val missingHistory = history
+                        .asSequence()
                         .filter { it.timestamp > missingSince && it.timestamp <= now }
                         .distinctBy { it.timestamp }
+                        .toList()
                         .sortedBy { it.timestamp }
 
                     if (missingHistory.isNotEmpty()) {
@@ -428,8 +434,9 @@ class SensorForegroundService : Service() {
     private fun updateLiveNotification(it: SensorData) {
         val tempStr = String.format(java.util.Locale.GERMANY, "%.1f", it.temperature)
         val humStr = PercentFormatter.format(it.humidity)
+        val lastUpdate = timeFormatter.get()?.format(java.util.Date(it.timestamp)) ?: ""
         val devName = prefs.getDeviceName(it.macAddress)
-        updateNotification(devName, "🌡 ${tempStr}°C   💧 $humStr")
+        updateNotification(devName, "🌡 ${tempStr}°C   💧 $humStr   🕒 $lastUpdate")
     }
 
     private fun updateNotification(title: String, text: String) {
@@ -483,7 +490,7 @@ class SensorForegroundService : Service() {
                     ))
                     lastDbSaveMap[it.macAddress] = now
                 } catch (e: Exception) {
-                    Log.e("SensorService", "DB Save Error", e)
+                    AppLogger.log("SensorService", "DB Save Error: ${e.message}")
                 }
             }
         }
