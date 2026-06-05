@@ -39,7 +39,6 @@ fun HistoryScreen(
     val database = remember { SensorDatabase.getDatabase(context) }
     val prefs = remember { PrefsManager(context) }
     val tempUnit = prefs.tempUnit
-    val zoomMode = prefs.chartZoomMode
     
     // Time Range State: 0=Day, 1=Week, 2=Month, 3=6Months
     var timeFilter by remember { mutableStateOf(0) }
@@ -91,13 +90,13 @@ fun HistoryScreen(
         // Temperature Chart
         val tempLabel = if (tempUnit == "F") "Temperature (°F)" else "Temperature (°C)"
         Text(tempLabel, style = MaterialTheme.typography.bodyMedium)
-        SensorChart(data = historyData, isTemperature = true, modifier = Modifier.weight(1f), tempUnit = tempUnit, zoomMode = zoomMode)
+        SensorChart(data = historyData, isTemperature = true, modifier = Modifier.weight(1f), tempUnit = tempUnit)
         
         Spacer(modifier = Modifier.height(16.dp))
         
         // Humidity Chart
         Text("Humidity (%)", style = MaterialTheme.typography.bodyMedium)
-        SensorChart(data = historyData, isTemperature = false, modifier = Modifier.weight(1f), tempUnit = tempUnit, zoomMode = zoomMode)
+        SensorChart(data = historyData, isTemperature = false, modifier = Modifier.weight(1f), tempUnit = tempUnit)
         
         Spacer(modifier = Modifier.height(16.dp))
         

@@ -77,7 +77,6 @@ fun SettingsScreen(
     var autoPruningDays by remember { mutableStateOf(prefs.autoPruningDays) }
     var autoHistorySyncMode by remember { mutableStateOf(prefs.autoHistorySyncMode) }
     var ongoingNotificationEnabled by remember { mutableStateOf(prefs.ongoingNotificationEnabled) }
-    var chartZoomMode by remember { mutableStateOf(prefs.chartZoomMode) }
     var showWipeConfirmation by remember { mutableStateOf(false) }
     var showAdvanced by remember { mutableStateOf(false) }
 
@@ -313,25 +312,6 @@ fun SettingsScreen(
                         )
                     },
                     modifier = Modifier.fillMaxWidth()
-                )
-                
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                
-                val zoomModes = listOf("off", "h", "hv")
-                val zoomLabels = mapOf(
-                    "off" to "Off (No Zoom)",
-                    "h" to "Horizontal Only",
-                    "hv" to "Horizontal & Vertical"
-                )
-                DropdownSelector(
-                    label = "Chart Pinch-to-Zoom",
-                    options = zoomModes,
-                    selectedOption = chartZoomMode,
-                    optionToString = { zoomLabels[it] ?: it },
-                    onOptionSelected = {
-                        chartZoomMode = it
-                        prefs.chartZoomMode = it
-                    }
                 )
             }
         }

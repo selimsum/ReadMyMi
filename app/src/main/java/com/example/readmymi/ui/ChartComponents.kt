@@ -32,8 +32,7 @@ fun SensorChart(
     data: List<SensorEntity>,
     isTemperature: Boolean, // true for Temp, false for Humidity
     modifier: Modifier = Modifier,
-    tempUnit: String = "C",
-    zoomMode: String = "hv"
+    tempUnit: String = "C"
 ) {
     if (data.isEmpty()) return
 
@@ -48,25 +47,12 @@ fun SensorChart(
         factory = { context ->
             LineChartView(context).apply {
                 isInteractive = true
+                zoomType = ZoomType.HORIZONTAL_AND_VERTICAL
+                setContainerScrollEnabled(true, ContainerScrollType.HORIZONTAL)
                 isValueSelectionEnabled = true
             }
         },
         update = { chartView ->
-            // Apply zoom settings (factory only runs once, so we set here too)
-            when (zoomMode) {
-                "h" -> {
-                    chartView.zoomType = ZoomType.HORIZONTAL
-                    chartView.setContainerScrollEnabled(true, ContainerScrollType.HORIZONTAL)
-                }
-                "hv" -> {
-                    chartView.zoomType = ZoomType.HORIZONTAL_AND_VERTICAL
-                    chartView.setContainerScrollEnabled(true, ContainerScrollType.HORIZONTAL)
-                }
-                else -> {
-                    chartView.isInteractive = false
-                    chartView.setContainerScrollEnabled(false, ContainerScrollType.HORIZONTAL)
-                }
-            }
             val sampledData = if (data.size > 500) {
                 val rate = data.size / 250
                 data.filterIndexed { index, _ -> index % rate == 0 || index == data.lastIndex }
@@ -99,20 +85,15 @@ fun SensorChart(
 
             // Custom Touch Listener for "Scrubbing" (Slide to Select) and Column/Vertical Hit detection
             // allowing the user to tap above/below points or slide finger to read data.
-            // Always returns false so the chart's internal onTouchEvent (zoom/scroll) still fires.
             chartView.setOnTouchListener { v, event ->
                 val parent = v.parent
 
                 if (event.pointerCount > 1) {
-                    // Let chart handle pinch-to-zoom when enabled
-                    if (zoomMode != "off") {
-                        parent?.requestDisallowInterceptTouchEvent(true)
-                    }
                     return@setOnTouchListener false
                 }
 
-                if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN || 
-                    event.actionMasked == android.view.MotionEvent.ACTION_MOVE) {
+                if (event.action == android.view.MotionEvent.ACTION_DOWN || 
+                    event.action == android.view.MotionEvent.ACTION_MOVE) {
                     parent?.requestDisallowInterceptTouchEvent(true)
                     
                     val chart = v as Chart
@@ -129,11 +110,14 @@ fun SensorChart(
                         
                         chart.selectValue(SelectedValue(0, nearestIndex, SelectedValue.SelectedValueType.LINE))
                     }
-                } else if (event.actionMasked == android.view.MotionEvent.ACTION_UP || 
-                           event.actionMasked == android.view.MotionEvent.ACTION_CANCEL) {
+                    true
+                } else if (event.action == android.view.MotionEvent.ACTION_UP || 
+                           event.action == android.view.MotionEvent.ACTION_CANCEL) {
                     parent?.requestDisallowInterceptTouchEvent(false)
+                    true
+                } else {
+                    false
                 }
-                false
             }
 
             // Remove Toast listener (User requested no popup)

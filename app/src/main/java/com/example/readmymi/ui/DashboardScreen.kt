@@ -198,7 +198,6 @@ fun HistoryChartCard(macAddress: String, database: SensorDatabase) {
     val context = LocalContext.current
     val prefs = remember { PrefsManager(context) }
     val tempUnit = prefs.tempUnit
-    val zoomMode = prefs.chartZoomMode
 
     var timeFilter by remember { mutableStateOf(0) }
     val endTime = System.currentTimeMillis()
@@ -223,9 +222,9 @@ fun HistoryChartCard(macAddress: String, database: SensorDatabase) {
             }
             
             if (historyData.isNotEmpty()) {
-                SensorChart(historyData, isTemperature = true, tempUnit = tempUnit, zoomMode = zoomMode)
+                SensorChart(historyData, isTemperature = true, tempUnit = tempUnit)
                 Spacer(modifier = Modifier.height(8.dp))
-                SensorChart(historyData, isTemperature = false, tempUnit = tempUnit, zoomMode = zoomMode)
+                SensorChart(historyData, isTemperature = false, tempUnit = tempUnit)
             } else {
                 Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
                     Text("No history data", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -240,12 +239,17 @@ fun HistoryActions(isDownloading: Boolean, onDownload: (Int) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { onDownload(200) }, enabled = !isDownloading, modifier = Modifier.weight(1f)) {
-                Text("Update History")
+                Text("Recent (200)")
             }
             Button(onClick = { onDownload(30000) }, enabled = !isDownloading, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)) {
-                Text("Full History")
+                Text("Full (30k)")
             }
         }
+        Text(
+            "Recent: Quick update with latest readings. Full: Complete history download.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         if (isDownloading) {
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             Text("Downloading history...", style = MaterialTheme.typography.labelSmall, modifier = Modifier.align(Alignment.CenterHorizontally))
