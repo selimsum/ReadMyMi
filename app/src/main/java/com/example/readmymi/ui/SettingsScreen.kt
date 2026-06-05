@@ -452,9 +452,41 @@ fun SettingsScreen(
                             it.toIntOrNull()?.let { v -> prefs.alertBatteryLow = v }
                         }
                     )
-                    
+                }
+            }
+        }
+
+        item {
+            OutlinedButton(
+                onClick = { showAdvanced = !showAdvanced },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = if (showAdvanced) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = null
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(if (showAdvanced) "Hide Advanced Options" else "Show Advanced Options")
+            }
+        }
+
+        if (showAdvanced) {
+            item {
+                SettingsCard {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Timer,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Text("Offline Detection", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    }
+
                     ListItem(
-                        headlineContent = { Text("Offline Timeout Override") },
+                        headlineContent = { Text("Override Auto Timeout") },
                         supportingContent = {
                             val autoMins = (prefs.scanIntervalSeconds * 2 / 60).coerceAtLeast(1)
                             Text(
@@ -490,23 +522,7 @@ fun SettingsScreen(
                     }
                 }
             }
-        }
 
-        item {
-            OutlinedButton(
-                onClick = { showAdvanced = !showAdvanced },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(
-                    imageVector = if (showAdvanced) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                    contentDescription = null
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(if (showAdvanced) "Hide Advanced Options" else "Show Advanced Options")
-            }
-        }
-
-        if (showAdvanced) {
             item {
                 SettingsCard {
                     Row(
