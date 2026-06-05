@@ -198,6 +198,7 @@ fun HistoryChartCard(macAddress: String, database: SensorDatabase) {
     val context = LocalContext.current
     val prefs = remember { PrefsManager(context) }
     val tempUnit = prefs.tempUnit
+    val zoomMode = prefs.chartZoomMode
 
     var timeFilter by remember { mutableStateOf(0) }
     val endTime = System.currentTimeMillis()
@@ -222,9 +223,9 @@ fun HistoryChartCard(macAddress: String, database: SensorDatabase) {
             }
             
             if (historyData.isNotEmpty()) {
-                SensorChart(historyData, isTemperature = true, tempUnit = tempUnit)
+                SensorChart(historyData, isTemperature = true, tempUnit = tempUnit, zoomMode = zoomMode)
                 Spacer(modifier = Modifier.height(8.dp))
-                SensorChart(historyData, isTemperature = false, tempUnit = tempUnit)
+                SensorChart(historyData, isTemperature = false, tempUnit = tempUnit, zoomMode = zoomMode)
             } else {
                 Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
                     Text("No history data", color = MaterialTheme.colorScheme.onSurfaceVariant)

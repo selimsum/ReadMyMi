@@ -118,6 +118,10 @@ class PrefsManager(context: Context) {
         get() = prefs.getBoolean("ongoing_notification_enabled", true)
         set(value) = prefs.edit().putBoolean("ongoing_notification_enabled", value).apply()
 
+    var chartZoomMode: String
+        get() = prefs.getString("chart_zoom_mode", "hv") ?: "hv"
+        set(value) = prefs.edit().putString("chart_zoom_mode", value).apply()
+
     fun getLastHistorySyncTimestamp(mac: String): Long {
         return prefs.getLong("last_history_sync_$mac", 0L)
     }

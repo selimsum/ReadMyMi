@@ -32,7 +32,8 @@ fun SensorChart(
     data: List<SensorEntity>,
     isTemperature: Boolean, // true for Temp, false for Humidity
     modifier: Modifier = Modifier,
-    tempUnit: String = "C"
+    tempUnit: String = "C",
+    zoomMode: String = "hv"
 ) {
     if (data.isEmpty()) return
 
@@ -47,12 +48,25 @@ fun SensorChart(
         factory = { context ->
             LineChartView(context).apply {
                 isInteractive = true
-                zoomType = ZoomType.HORIZONTAL_AND_VERTICAL
-                setContainerScrollEnabled(true, ContainerScrollType.HORIZONTAL)
                 isValueSelectionEnabled = true
             }
         },
         update = { chartView ->
+            // Apply zoom settings (factory only runs once, so we set here too)
+            when (zoomMode) {
+                "h" -> {
+                    chartView.zoomType = ZoomType.HORIZONTAL
+                    chartView.setContainerScrollEnabled(true, ContainerScrollType.HORIZONTAL)
+                }
+                "hv" -> {
+                    chartView.zoomType = ZoomType.HORIZONTAL_AND_VERTICAL
+                    chartView.setContainerScrollEnabled(true, ContainerScrollType.HORIZONTAL)
+                }
+                else -> {
+                    chartView.isInteractive = false
+                    chartView.setContainerScrollEnabled(false, ContainerScrollType.HORIZONTAL)
+                }
+            }
             val sampledData = if (data.size > 500) {
                 val rate = data.size / 250
                 data.filterIndexed { index, _ -> index % rate == 0 || index == data.lastIndex }
@@ -89,7 +103,8 @@ fun SensorChart(
                 val parent = v.parent
 
                 if (event.pointerCount > 1) {
-                    return@setOnTouchListener false
+                    // Allow multi-touch pinch-to-zoom when zoom is enabled
+                    return@setOnTouchListener if (zoomMode != "off") false else true
                 }
 
                 if (event.action == android.view.MotionEvent.ACTION_DOWN || 

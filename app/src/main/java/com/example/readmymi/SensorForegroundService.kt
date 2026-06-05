@@ -39,12 +39,6 @@ class SensorForegroundService : Service() {
         var isServiceRunning = false
         val liveSensorData = kotlinx.coroutines.flow.MutableStateFlow<SensorData?>(null)
         val serviceStatus = kotlinx.coroutines.flow.MutableStateFlow("Initializing...")
-
-        private val timeFormatter = object : ThreadLocal<java.text.SimpleDateFormat>() {
-            override fun initialValue(): java.text.SimpleDateFormat {
-                return java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
-            }
-        }
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -439,11 +433,10 @@ class SensorForegroundService : Service() {
     private fun updateLiveNotification(it: SensorData) {
         val tempStr = String.format(java.util.Locale.GERMANY, "%.1f", it.temperature)
         val humStr = PercentFormatter.format(it.humidity)
-        val lastUpdate = timeFormatter.get()?.format(java.util.Date(it.timestamp)) ?: ""
         val devName = prefs.getDeviceName(it.macAddress)
         val isHappy = it.temperature in 21.0..26.0 && it.humidity in 30.0..60.0
         val comfortIcon = if (isHappy) "😊" else "🙁"
-        updateNotification(devName, "🌡 ${tempStr}°C   💧 $humStr   $comfortIcon   🕒 $lastUpdate")
+        updateNotification(devName, "🌡 ${tempStr}°C   💧 $humStr   $comfortIcon")
     }
 
     private fun updateNotification(title: String, text: String) {
