@@ -32,7 +32,7 @@ import java.time.ZoneId
 import com.example.readmymi.ui.getTimeFilterBounds
 
 private val sleepingRegex = Regex("""Sleeping\.\.\. \((\d+)s\)""")
-private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -104,7 +104,7 @@ fun SensorMainCard(
     val isHappy = tempOk && humidityOk
     val isOnline = isServiceRunning && !prefs.getWasOffline(data.macAddress)
     val lastUpdateTime = remember(data.timestamp) {
-        timeFormatter.format(Instant.ofEpochMilli(data.timestamp).atZone(ZoneId.systemDefault()))
+        timeFormatter.format(Instant.ofEpochMilli(data.timestamp))
     }
     val nextUpdateTime = remember(serviceStatus, data.timestamp, prefs.scanIntervalSeconds) {
         getNextUpdateTime(serviceStatus, data.timestamp, prefs.scanIntervalSeconds)
@@ -177,7 +177,7 @@ private fun getNextUpdateTime(serviceStatus: String, lastReadingTimestamp: Long,
         lastReadingTimestamp + scanIntervalSeconds.coerceAtLeast(30) * 1000L
     }
 
-    return timeFormatter.format(Instant.ofEpochMilli(nextUpdateMillis).atZone(ZoneId.systemDefault()))
+    return timeFormatter.format(Instant.ofEpochMilli(nextUpdateMillis))
 }
 
 @Composable
