@@ -14,9 +14,6 @@ import com.example.readmymi.ui.theme.md_chartTemperature
 import com.example.readmymi.ui.theme.md_chartHumidity
 import lecho.lib.hellocharts.model.*
 import lecho.lib.hellocharts.view.LineChartView
-import lecho.lib.hellocharts.view.Chart
-import lecho.lib.hellocharts.gesture.ZoomType
-import lecho.lib.hellocharts.gesture.ContainerScrollType
 import com.example.readmymi.data.SensorEntity
 import java.util.Date
 import java.util.Locale
@@ -24,7 +21,6 @@ import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import kotlin.math.abs
 import kotlin.math.roundToInt
 
 @Composable
@@ -46,10 +42,8 @@ fun SensorChart(
             .padding(top = 16.dp, bottom = 12.dp),
         factory = { context ->
             LineChartView(context).apply {
-                isInteractive = true
-                zoomType = ZoomType.HORIZONTAL_AND_VERTICAL
-                setContainerScrollEnabled(true, ContainerScrollType.HORIZONTAL)
-                isValueSelectionEnabled = true
+                isInteractive = false
+                isValueSelectionEnabled = false
             }
         },
         update = { chartView ->
@@ -83,48 +77,7 @@ fun SensorChart(
                 PointValue(xRaw, yRaw).setLabel(labelText.toCharArray())
             }
 
-            // Custom Touch Listener for "Scrubbing" (Slide to Select) and Column/Vertical Hit detection
-            // allowing the user to tap above/below points or slide finger to read data.
-            chartView.setOnTouchListener { v, event ->
-                val parent = v.parent
-
-                if (event.pointerCount > 1) {
-                    return@setOnTouchListener false
-                }
-
-                if (event.action == android.view.MotionEvent.ACTION_DOWN || 
-                    event.action == android.view.MotionEvent.ACTION_MOVE) {
-                    parent?.requestDisallowInterceptTouchEvent(true)
-                    
-                    val chart = v as Chart
-                    val computator = chart.chartComputator
-                    val contentRect = computator.contentRectMinusAllMargins
-                    val viewport = computator.visibleViewport
-                    
-                    if (contentRect.width() > 0 && viewport.width() > 0) {
-                        val x = event.x.coerceIn(contentRect.left.toFloat(), contentRect.right.toFloat())
-                        val relativeX = (x - contentRect.left) / contentRect.width()
-                        val valueX = viewport.left + (relativeX * viewport.width())
-                        
-                        val nearestIndex = binarySearchClosest(pointsData, valueX)
-                        
-                        chart.selectValue(SelectedValue(0, nearestIndex, SelectedValue.SelectedValueType.LINE))
-                    }
-                    true
-                } else if (event.action == android.view.MotionEvent.ACTION_UP || 
-                           event.action == android.view.MotionEvent.ACTION_CANCEL) {
-                    parent?.requestDisallowInterceptTouchEvent(false)
-                    true
-                } else {
-                    false
-                }
-            }
-
-            // Remove Toast listener (User requested no popup)
-            chartView.onValueTouchListener = object : lecho.lib.hellocharts.listener.LineChartOnValueSelectListener {
-                override fun onValueSelected(lineIndex: Int, pointIndex: Int, value: PointValue) {}
-                override fun onValueDeselected() {}
-            }
+            // Chart is display-only – no touch interaction
 
             // Ensure points are technically present for rendering, but minimal if dense
             val line = Line(pointsData).apply {
@@ -190,22 +143,4 @@ fun SensorChart(
             chartView.lineChartData = chartData
         }
     )
-}
-
-private fun binarySearchClosest(points: List<PointValue>, targetX: Float): Int {
-    if (points.isEmpty()) return 0
-    var low = 0
-    var high = points.size - 1
-    if (targetX <= points[low].x) return low
-    if (targetX >= points[high].x) return high
-    while (low <= high) {
-        val mid = (low + high) ushr 1
-        val midX = points[mid].x
-        when {
-            targetX < midX -> high = mid - 1
-            targetX > midX -> low = mid + 1
-            else -> return mid
-        }
-    }
-    return if (abs(points[low].x - targetX) < abs(points[high].x - targetX)) low else high
 }
