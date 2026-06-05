@@ -99,16 +99,20 @@ fun SensorChart(
 
             // Custom Touch Listener for "Scrubbing" (Slide to Select) and Column/Vertical Hit detection
             // allowing the user to tap above/below points or slide finger to read data.
+            // Always returns false so the chart's internal onTouchEvent (zoom/scroll) still fires.
             chartView.setOnTouchListener { v, event ->
                 val parent = v.parent
 
                 if (event.pointerCount > 1) {
-                    // Allow multi-touch pinch-to-zoom when zoom is enabled
-                    return@setOnTouchListener if (zoomMode != "off") false else true
+                    // Let chart handle pinch-to-zoom when enabled
+                    if (zoomMode != "off") {
+                        parent?.requestDisallowInterceptTouchEvent(true)
+                    }
+                    return@setOnTouchListener false
                 }
 
-                if (event.action == android.view.MotionEvent.ACTION_DOWN || 
-                    event.action == android.view.MotionEvent.ACTION_MOVE) {
+                if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN || 
+                    event.actionMasked == android.view.MotionEvent.ACTION_MOVE) {
                     parent?.requestDisallowInterceptTouchEvent(true)
                     
                     val chart = v as Chart
@@ -125,14 +129,11 @@ fun SensorChart(
                         
                         chart.selectValue(SelectedValue(0, nearestIndex, SelectedValue.SelectedValueType.LINE))
                     }
-                    true
-                } else if (event.action == android.view.MotionEvent.ACTION_UP || 
-                           event.action == android.view.MotionEvent.ACTION_CANCEL) {
+                } else if (event.actionMasked == android.view.MotionEvent.ACTION_UP || 
+                           event.actionMasked == android.view.MotionEvent.ACTION_CANCEL) {
                     parent?.requestDisallowInterceptTouchEvent(false)
-                    true
-                } else {
-                    false
                 }
+                false
             }
 
             // Remove Toast listener (User requested no popup)
