@@ -441,7 +441,9 @@ class SensorForegroundService : Service() {
         val humStr = PercentFormatter.format(it.humidity)
         val lastUpdate = timeFormatter.get()?.format(java.util.Date(it.timestamp)) ?: ""
         val devName = prefs.getDeviceName(it.macAddress)
-        updateNotification(devName, "🌡 ${tempStr}°C   💧 $humStr   🕒 $lastUpdate")
+        val isHappy = it.temperature in 21.0..26.0 && it.humidity in 30.0..60.0
+        val comfortIcon = if (isHappy) "😊" else "🙁"
+        updateNotification(devName, "🌡 ${tempStr}°C   💧 $humStr   $comfortIcon   🕒 $lastUpdate")
     }
 
     private fun updateNotification(title: String, text: String) {
