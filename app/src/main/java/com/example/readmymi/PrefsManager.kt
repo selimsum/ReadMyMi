@@ -102,6 +102,17 @@ class PrefsManager(context: Context) {
         get() = prefs.getInt("offline_timeout_minutes", 15)
         set(value) = prefs.edit().putInt("offline_timeout_minutes", value).apply()
 
+    var offlineTimeoutOverride: Boolean
+        get() = prefs.getBoolean("offline_timeout_override", false)
+        set(value) = prefs.edit().putBoolean("offline_timeout_override", value).apply()
+
+    /** Returns the effective offline timeout in minutes.
+     *  If override is disabled, defaults to scanInterval × 2 (converted from seconds to minutes).
+     *  If override is enabled, uses the user-set offlineTimeoutMinutes value. */
+    val effectiveOfflineTimeoutMinutes: Int
+        get() = if (offlineTimeoutOverride) offlineTimeoutMinutes
+                else (scanIntervalSeconds * 2 / 60).coerceAtLeast(1)
+
     var autoPruningDays: Int
         get() = prefs.getInt("auto_pruning_days", 0)
         set(value) = prefs.edit().putInt("auto_pruning_days", value).apply()

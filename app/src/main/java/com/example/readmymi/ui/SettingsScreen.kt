@@ -72,6 +72,7 @@ fun SettingsScreen(
     var alertBatteryLowEnabled by remember { mutableStateOf(prefs.alertBatteryLowEnabled) }
     var alertBatteryLow by remember { mutableStateOf(prefs.alertBatteryLow.toString()) }
     var offlineTimeout by remember { mutableStateOf(prefs.offlineTimeoutMinutes.toString()) }
+    var offlineTimeoutOverride by remember { mutableStateOf(prefs.offlineTimeoutOverride) }
     var alertVibrationEnabled by remember { mutableStateOf(prefs.alertVibrationEnabled) }
     var autoPruningDays by remember { mutableStateOf(prefs.autoPruningDays) }
     var autoHistorySyncMode by remember { mutableStateOf(prefs.autoHistorySyncMode) }
@@ -452,17 +453,41 @@ fun SettingsScreen(
                         }
                     )
                     
-                    OutlinedTextField(
-                        value = offlineTimeout,
-                        onValueChange = {
-                            offlineTimeout = it
-                            it.toIntOrNull()?.let { v -> prefs.offlineTimeoutMinutes = v }
+                    ListItem(
+                        headlineContent = { Text("Offline Timeout Override") },
+                        supportingContent = {
+                            val autoMins = (prefs.scanIntervalSeconds * 2 / 60).coerceAtLeast(1)
+                            Text(
+                                if (offlineTimeoutOverride)
+                                    "Manual: ${prefs.effectiveOfflineTimeoutMinutes} min"
+                                else
+                                    "Auto: scan interval × 2 = ${autoMins} min"
+                            )
                         },
-                        label = { Text("Offline Timeout (Minutes)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
+                        trailingContent = {
+                            Switch(
+                                checked = offlineTimeoutOverride,
+                                onCheckedChange = {
+                                    offlineTimeoutOverride = it
+                                    prefs.offlineTimeoutOverride = it
+                                }
+                            )
+                        },
                         modifier = Modifier.fillMaxWidth()
                     )
+                    if (offlineTimeoutOverride) {
+                        OutlinedTextField(
+                            value = offlineTimeout,
+                            onValueChange = {
+                                offlineTimeout = it
+                                it.toIntOrNull()?.let { v -> prefs.offlineTimeoutMinutes = v }
+                            },
+                            label = { Text("Offline Timeout (Minutes)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             }
         }

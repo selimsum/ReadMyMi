@@ -268,7 +268,7 @@ class SensorForegroundService : Service() {
         val targetMac = prefs.lastMac
         if (targetMac.isNotEmpty()) {
             val lastSeen = lastPublishMap[targetMac] ?: 0L
-            val timeoutMs = prefs.offlineTimeoutMinutes * 60 * 1000L
+            val timeoutMs = prefs.effectiveOfflineTimeoutMinutes * 60 * 1000L
             val isCurrentlyOffline = if (lastSeen > 0L) {
                 (scanStartTime - lastSeen) > timeoutMs
             } else {
@@ -278,7 +278,7 @@ class SensorForegroundService : Service() {
             when {
                 isCurrentlyOffline && !wasOffline -> {
                     prefs.setWasOffline(targetMac, true)
-                    AppLogger.log("Service", "Device $targetMac went offline (no data for ${prefs.offlineTimeoutMinutes} mins).")
+                    AppLogger.log("Service", "Device $targetMac went offline (no data for ${prefs.effectiveOfflineTimeoutMinutes} mins).")
                 }
                 !isCurrentlyOffline && wasOffline -> {
                     prefs.setWasOffline(targetMac, false)
