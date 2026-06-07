@@ -65,7 +65,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import com.example.readmymi.ui.theme.ReadMyMiTheme
 import com.example.readmymi.ui.HistoryScreen
-import com.example.readmymi.ui.SensorChart
 import com.example.readmymi.data.SensorDatabase
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
