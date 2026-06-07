@@ -24,7 +24,6 @@ import com.example.readmymi.PercentFormatter
 import com.example.readmymi.PrefsManager
 import com.example.readmymi.SensorData
 import com.example.readmymi.data.SensorDatabase
-import com.example.readmymi.data.SensorEntity
 import java.util.*
 import java.time.format.DateTimeFormatter
 import java.time.Instant

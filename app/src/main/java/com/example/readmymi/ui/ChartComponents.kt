@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -34,6 +35,9 @@ fun SensorChart(
 
     val themeColor = if (isTemperature) md_chartTemperature.toArgb() else md_chartHumidity.toArgb()
     val labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
+
+    val formatStr = if (data.isNotEmpty() && data.last().timestamp - data.first().timestamp > 86400000L) "dd/MM" else "HH:mm"
+    val dateFormatter = remember(formatStr) { DateTimeFormatter.ofPattern(formatStr, Locale.US).withZone(ZoneId.systemDefault()) }
 
     AndroidView(
         modifier = modifier
@@ -94,7 +98,7 @@ fun SensorChart(
             val chartData = LineChartData(lines)
 
             val formatStr = if (data.isNotEmpty() && data.last().timestamp - data.first().timestamp > 86400000L) "dd/MM" else "HH:mm"
-            val dateFormat = SimpleDateFormat(formatStr, Locale.US)
+            // dateFormatter is now hoisted
             val axisXValues = mutableListOf<AxisValue>()
             
             if (sampledData.isNotEmpty()) {
@@ -107,15 +111,13 @@ fun SensorChart(
                     }
                 }
                 
-                val sharedDate = Date()
                 for (targetTime in targetTimes) {
                     val labelX = if (duration > 0) {
                         ((targetTime - minTime).toDouble() / duration * (sampledData.size - 1)).toFloat()
                     } else {
                         0f
                     }
-                    sharedDate.time = targetTime
-                    axisXValues.add(AxisValue(labelX).setLabel(dateFormat.format(sharedDate)))
+                    axisXValues.add(AxisValue(labelX).setLabel(dateFormatter.format(Instant.ofEpochMilli(targetTime))))
                 }
             }
 

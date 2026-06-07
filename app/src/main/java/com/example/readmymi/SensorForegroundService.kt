@@ -52,6 +52,8 @@ class SensorForegroundService : Service() {
     private lateinit var prefs: PrefsManager
     private val lastDbSaveMap = mutableMapOf<String, Long>() // Throttle DB saves
     private val lastAlertMap = mutableMapOf<String, Long>() // Throttle alert notifications (per alert key)
+    private val dbSaveBuffer = java.util.concurrent.ConcurrentLinkedQueue<SensorEntity>()
+    private var lastDbBatchSaveTime = 0L
 
     private val latestReadings = mutableMapOf<String, SensorData>()
     private val historyCheckedMap = mutableMapOf<String, Boolean>()
@@ -479,16 +481,32 @@ class SensorForegroundService : Service() {
         val now = System.currentTimeMillis()
         val lastSave = lastDbSaveMap[it.macAddress] ?: 0L
         if (now - lastSave > 60000) {
+            dbSaveBuffer.add(SensorEntity(
+                macAddress = it.macAddress,
+                temperature = it.temperature.toFloat(),
+                humidity = it.humidity.toInt(),
+                battery = it.battery,
+                timestamp = it.timestamp
+            ))
+            lastDbSaveMap[it.macAddress] = now
+
+            if (dbSaveBuffer.size >= 10 || now - lastDbBatchSaveTime > 60000) {
+                flushDbBuffer()
+            }
+        }
+    }
+
+    private fun flushDbBuffer() {
+        if (dbSaveBuffer.isEmpty()) return
+        val entitiesToSave = mutableListOf<SensorEntity>()
+        while (dbSaveBuffer.isNotEmpty()) {
+            dbSaveBuffer.poll()?.let { entitiesToSave.add(it) }
+        }
+        if (entitiesToSave.isNotEmpty()) {
+            lastDbBatchSaveTime = System.currentTimeMillis()
             serviceScope.launch(Dispatchers.IO) {
                 try {
-                    database.sensorDao().insert(SensorEntity(
-                        macAddress = it.macAddress,
-                        temperature = it.temperature.toFloat(),
-                        humidity = it.humidity.toInt(),
-                        battery = it.battery,
-                        timestamp = it.timestamp
-                    ))
-                    lastDbSaveMap[it.macAddress] = now
+                    database.sensorDao().insertAll(entitiesToSave)
                 } catch (e: Exception) {
                     AppLogger.log("SensorService", "DB Save Error: ${e.message}")
                 }
@@ -497,6 +515,7 @@ class SensorForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        flushDbBuffer()
         super.onDestroy()
         isServiceRunning = false
         val manager = getSystemService(NotificationManager::class.java)
