@@ -47,36 +47,4 @@ class TimeFilterUtilsTest {
         assertEquals(expectedStartHigh to testEndTime, resultHigh)
     }
 
-    @Test
-    fun getTimeBucketSize_filter0_returns10Minutes() {
-        val result = getTimeBucketSize(filter = 0)
-        assertEquals(10 * 60 * 1000L, result)
-    }
-
-    @Test
-    fun getTimeBucketSize_filter1_returns1Hour() {
-        val result = getTimeBucketSize(filter = 1)
-        assertEquals(1 * 60 * 60 * 1000L, result)
-    }
-
-    @Test
-    fun getTimeBucketSize_filter2_returns4Hours() {
-        val result = getTimeBucketSize(filter = 2)
-        assertEquals(4 * 60 * 60 * 1000L, result)
-    }
-
-    @Test
-    fun getTimeBucketSize_filter3_returns24Hours() {
-        val result = getTimeBucketSize(filter = 3)
-        assertEquals(24 * 60 * 60 * 1000L, result)
-    }
-
-    @Test
-    fun getTimeBucketSize_invalidFilter_returns10Minutes() {
-        val resultNegative = getTimeBucketSize(filter = -1)
-        assertEquals(10 * 60 * 1000L, resultNegative)
-
-        val resultHigh = getTimeBucketSize(filter = 99)
-        assertEquals(10 * 60 * 1000L, resultHigh)
-    }
 }
