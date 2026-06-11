@@ -285,6 +285,7 @@ class SensorForegroundService : Service() {
                 !isCurrentlyOffline && wasOffline -> {
                     prefs.setWasOffline(targetMac, false)
                     AppLogger.log("Service", "Device $targetMac came back online.")
+                    historyCheckedMap.remove(targetMac)
                 }
             }
         }
@@ -358,7 +359,12 @@ class SensorForegroundService : Service() {
         }
 
         val now = System.currentTimeMillis()
-        if (mode == "start") {
+        val wasOffline = prefs.getWasOffline(mac)
+        val forceSync = wasOffline
+
+        if (forceSync) {
+            AppLogger.log("Service", "Device $mac was offline and is now back online. Forcing history sync...")
+        } else if (mode == "start") {
             if (historyCheckedMap.containsKey(mac)) {
                 return
             }
