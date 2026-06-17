@@ -2,6 +2,7 @@ package com.example.readmymi
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 object AppLogger {
     private const val MAX_LOGS = 500
@@ -16,11 +17,12 @@ object AppLogger {
 
     fun log(tag: String, message: String) {
         val entry = "[${dateFormat.get()?.format(java.util.Date())}] $tag: $message"
-        val current = _logs.value
-        _logs.value = if (current.size < MAX_LOGS) {
-            listOf(entry) + current
-        } else {
-            listOf(entry) + current.subList(0, MAX_LOGS - 1)
+        _logs.update { current ->
+            if (current.size < MAX_LOGS) {
+                current + entry
+            } else {
+                current.subList(current.size - MAX_LOGS + 1, current.size) + entry
+            }
         }
     }
 

@@ -2,7 +2,6 @@ package com.example.readmymi.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,7 +12,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -40,6 +38,9 @@ import com.example.readmymi.data.SensorDatabase
 import kotlinx.coroutines.launch
 import android.database.sqlite.SQLiteException
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.core.content.FileProvider
+import java.io.File
+import java.io.FileOutputStream
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -131,12 +132,7 @@ fun SettingsScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures { _, dragAmount ->
-                    if (dragAmount > 50) onBack()
-                }
-            },
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
@@ -559,10 +555,14 @@ fun SettingsScreen(
                                         csvBuilder.append("$dateTime,${item.timestamp},${item.macAddress},${item.temperature},$tempF,${item.humidity},${item.battery}\n")
                                     }
                                     val csvString = csvBuilder.toString()
+                                    val csvFile = File(context.cacheDir, "sensor_export_${lastMac.replace(":", "_")}.csv")
+                                    FileOutputStream(csvFile).use { it.write(csvString.toByteArray()) }
+                                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", csvFile)
                                     val intent = Intent(Intent.ACTION_SEND).apply {
                                         type = "text/csv"
+                                        putExtra(Intent.EXTRA_STREAM, uri)
                                         putExtra(Intent.EXTRA_SUBJECT, "ReadMyMi Sensor Export - ${prefs.getDeviceName(lastMac)}")
-                                        putExtra(Intent.EXTRA_TEXT, csvString)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                     }
                                     context.startActivity(Intent.createChooser(intent, "Export Sensor Data"))
                                 } catch (e: Exception) {
@@ -612,7 +612,7 @@ fun SettingsScreen(
                 }
                 Box(modifier = Modifier.fillMaxWidth().height(200.dp).background(MaterialTheme.colorScheme.surfaceContainerLow).padding(8.dp)) {
                     LazyColumn {
-                        items(logs) { log ->
+                        items(logs.asReversed()) { log ->
                             Text(log, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
                         }
                     }

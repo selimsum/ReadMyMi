@@ -21,12 +21,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         database.sensorDao().getLatest(mac)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val isServiceRunning = flow {
-        while (true) {
-            emit(SensorForegroundService.isServiceRunning)
-            kotlinx.coroutines.delay(1000)
-        }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(2000), SensorForegroundService.isServiceRunning)
+    val isServiceRunning = SensorForegroundService.isServiceRunningFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(2000), SensorForegroundService.isServiceRunning)
 
     val liveData = SensorForegroundService.liveSensorData
 

@@ -199,7 +199,7 @@ fun HistoryChartCard(macAddress: String, database: SensorDatabase) {
     val tempUnit = prefs.tempUnit
 
     var timeFilter by remember { mutableStateOf(0) }
-    val endTime = System.currentTimeMillis()
+    val endTime by remember(timeFilter) { mutableStateOf(System.currentTimeMillis()) }
     val (startTime, _) = getTimeFilterBounds(timeFilter, endTime)
     
     val historyData by database.sensorDao().getHistory(macAddress, startTime, endTime).collectAsState(initial = emptyList())

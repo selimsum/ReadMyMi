@@ -18,6 +18,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
 
 import com.example.readmymi.data.SensorDatabase
 import com.example.readmymi.data.SensorEntity
@@ -30,13 +31,13 @@ class SensorForegroundService : Service() {
         private const val CHANNEL_ID = "ReadMyMiServiceChannel"
         private const val CHANNEL_SILENT_ID = "ReadMyMiServiceChannelSilent"
         private const val ALERTS_CHANNEL_ID = "ReadMyMiAlertChannel"
-        private const val ALERT_NOTIFICATION_BASE_ID = 100
         private const val HISTORY_GAP_THRESHOLD_MS = 30 * 60 * 1000L
         private const val HISTORY_RECORD_INTERVAL_MS = 10 * 60 * 1000L
         private const val DEFAULT_HISTORY_RECORDS = 70
         private const val MAX_HISTORY_RECORDS = 512
         @Volatile
         var isServiceRunning = false
+        val isServiceRunningFlow = kotlinx.coroutines.flow.MutableStateFlow(false)
         val liveSensorData = kotlinx.coroutines.flow.MutableStateFlow<SensorData?>(null)
         val serviceStatus = kotlinx.coroutines.flow.MutableStateFlow("Initializing...")
     }
@@ -45,18 +46,21 @@ class SensorForegroundService : Service() {
     private lateinit var bluetoothSensorManager: BluetoothSensorManager
 
 
-    private val lastPublishMap = mutableMapOf<String, Long>()
+    private val lastPublishMap = ConcurrentHashMap<String, Long>()
     private var wakeLock: PowerManager.WakeLock? = null
     
     private lateinit var database: SensorDatabase
     private lateinit var prefs: PrefsManager
-    private val lastDbSaveMap = mutableMapOf<String, Long>() // Throttle DB saves
-    private val lastAlertMap = mutableMapOf<String, Long>() // Throttle alert notifications (per alert key)
+    private val lastDbSaveMap = ConcurrentHashMap<String, Long>() // Throttle DB saves
+    private val lastAlertMap = ConcurrentHashMap<String, Long>() // Throttle alert notifications (per alert key)
     private val dbSaveBuffer = java.util.concurrent.ConcurrentLinkedQueue<SensorEntity>()
     private var lastDbBatchSaveTime = 0L
+    private var lastVibrationEnabled = true
+    private var alertIdCounter = 200
+    private val alertKeyIds = ConcurrentHashMap<String, Int>()
 
-    private val latestReadings = mutableMapOf<String, SensorData>()
-    private val historyCheckedMap = mutableMapOf<String, Boolean>()
+    private val latestReadings = ConcurrentHashMap<String, SensorData>()
+    private val historyCheckedMap = ConcurrentHashMap.newKeySet<String>()
     
     // Flag to control service loop (Accessed via Companion for UI)
 
@@ -68,6 +72,7 @@ class SensorForegroundService : Service() {
         AppLogger.log("SensorService", "onStartCommand: action=${intent?.action}")
         if (intent?.action == "STOP_SCAN") {
             isServiceRunning = false
+            isServiceRunningFlow.value = false
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 stopForeground(STOP_FOREGROUND_REMOVE)
             } else {
@@ -79,6 +84,7 @@ class SensorForegroundService : Service() {
         } else if (intent?.action == "START_SCAN" || intent?.action == null) {
             if (!isServiceRunning) {
                 isServiceRunning = true
+                isServiceRunningFlow.value = true
                 startForegroundService()
                 serviceScope.launch {
                     runServiceLoop()
@@ -110,7 +116,7 @@ class SensorForegroundService : Service() {
         // Acquire WakeLock for reliable background scanning
         val powerManager = getSystemService(PowerManager::class.java)
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ReadMyMi::ScanWakeLock")
-        wakeLock?.acquire() // Indefinite acquisition until onDestroy
+        wakeLock?.acquire(4 * 60 * 60 * 1000L) // Safety timeout: 4 hours
 
         database = SensorDatabase.getDatabase(this)
         prefs = PrefsManager(this)
@@ -145,8 +151,11 @@ class SensorForegroundService : Service() {
             )
             manager.createNotificationChannel(silentChannel)
             
-            // Delete alert channel first to dynamically apply vibration changes immediately
-            manager.deleteNotificationChannel(ALERTS_CHANNEL_ID)
+            // Only delete and recreate alert channel when vibration setting changes
+            if (prefs.alertVibrationEnabled != lastVibrationEnabled) {
+                lastVibrationEnabled = prefs.alertVibrationEnabled
+                manager.deleteNotificationChannel(ALERTS_CHANNEL_ID)
+            }
             
             // Alert channel has higher importance so it shows as heads-up.
             val alertChannel = NotificationChannel(
@@ -206,7 +215,8 @@ class SensorForegroundService : Service() {
                 val alertedKey = "$mac:$key"
                 if (!lastAlertMap.containsKey(alertedKey)) {
                     lastAlertMap[alertedKey] = now
-                    sendAlertNotification(key.hashCode() + ALERT_NOTIFICATION_BASE_ID, title, "$devName: $message")
+                    val notifId = alertKeyIds.getOrPut(alertedKey) { alertIdCounter++ }
+                    sendAlertNotification(notifId, title, "$devName: $message")
                     AppLogger.log("Alert", "[$devName] $message")
                 }
             }
@@ -365,10 +375,10 @@ class SensorForegroundService : Service() {
         if (forceSync) {
             AppLogger.log("Service", "Device $mac was offline and is now back online. Forcing history sync...")
         } else if (mode == "start") {
-            if (historyCheckedMap.containsKey(mac)) {
+            if (historyCheckedMap.contains(mac)) {
                 return
             }
-            historyCheckedMap[mac] = true
+            historyCheckedMap.add(mac)
         } else {
             val intervalMs = if (mode == "12h") 12 * 3600 * 1000L else 24 * 3600 * 1000L
             val lastSync = prefs.getLastHistorySyncTimestamp(mac)
@@ -524,6 +534,7 @@ class SensorForegroundService : Service() {
         flushDbBuffer()
         super.onDestroy()
         isServiceRunning = false
+        isServiceRunningFlow.value = false
         val manager = getSystemService(NotificationManager::class.java)
         manager.cancel(NOTIFICATION_ID)
         wakeLock?.release()

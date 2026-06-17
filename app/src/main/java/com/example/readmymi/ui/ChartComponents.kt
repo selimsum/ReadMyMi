@@ -97,10 +97,9 @@ fun SensorChart(
             val lines = listOf(line)
             val chartData = LineChartData(lines)
 
-            val formatStr = if (data.isNotEmpty() && data.last().timestamp - data.first().timestamp > 86400000L) "dd/MM" else "HH:mm"
             // dateFormatter is now hoisted
             val axisXValues = mutableListOf<AxisValue>()
-            
+
             if (sampledData.isNotEmpty()) {
                 val numLabels = if (sampledData.size < 6) sampledData.size else 6
                 val targetTimes = (0 until numLabels).map { i ->
