@@ -52,8 +52,6 @@ class BluetoothSensorManager(private val context: Context) {
     private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager.adapter
     private val scanner: BluetoothLeScanner?
         get() = bluetoothAdapter?.bluetoothLeScanner
-    
-    private val instanceId = System.identityHashCode(this)
 
     private val _sensorDataFlow = MutableStateFlow<SensorData?>(null)
     val sensorDataFlow: StateFlow<SensorData?> = _sensorDataFlow.asStateFlow()

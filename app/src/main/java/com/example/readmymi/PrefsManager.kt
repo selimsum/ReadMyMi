@@ -68,16 +68,6 @@ class PrefsManager(context: Context) {
         prefs.edit().putString("name_$mac", name).apply()
     }
 
-    fun getOriginalDeviceName(mac: String): String {
-        return prefs.getString("orig_name_$mac", "") ?: ""
-    }
-
-    fun setOriginalDeviceName(mac: String, name: String) {
-        if (name.isNotEmpty()) {
-            prefs.edit().putString("orig_name_$mac", name).apply()
-        }
-    }
-
     fun getLastTimeSync(mac: String): Long {
         return prefs.getLong("last_time_sync_$mac", 0L)
     }
