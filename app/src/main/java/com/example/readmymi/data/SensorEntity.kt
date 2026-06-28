@@ -1,9 +1,10 @@
 package com.example.readmymi.data
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "sensor_data")
+@Entity(tableName = "sensor_data", indices = [Index(value = ["macAddress", "timestamp"], unique = true)])
 data class SensorEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val macAddress: String,

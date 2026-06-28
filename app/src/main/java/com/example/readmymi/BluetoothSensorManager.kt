@@ -125,7 +125,7 @@ class BluetoothSensorManager(private val context: Context) {
 
 
     @SuppressLint("MissingPermission")
-    suspend fun downloadHistory(deviceAddress: String, records: Int = 70, onLog: (String) -> Unit = {}): List<SensorData> = kotlinx.coroutines.withContext(Dispatchers.IO) {
+    suspend fun downloadHistory(deviceAddress: String, records: Int = 70, lastDbTimestamp: Long? = null, onLog: (String) -> Unit = {}): List<SensorData> = kotlinx.coroutines.withContext(Dispatchers.IO) {
         val historyList = mutableListOf<SensorData>()
         val device = bluetoothAdapter?.getRemoteDevice(deviceAddress) ?: return@withContext emptyList()
         
@@ -228,18 +228,34 @@ class BluetoothSensorManager(private val context: Context) {
              gatt?.close()
         }
         
-        return@withContext fixTimestamps(historyList)
+        return@withContext fixTimestamps(historyList, lastDbTimestamp)
     }
 
-    private fun fixTimestamps(history: List<SensorData>): List<SensorData> {
+    private fun fixTimestamps(history: List<SensorData>, lastDbTimestamp: Long? = null): List<SensorData> {
         if (history.isEmpty()) return history
         val now = System.currentTimeMillis()
-        val wrongRecords = history.filter { it.timestamp < 1577836800000L }.sortedBy { it.timestamp }
+        val sorted = history.sortedBy { it.timestamp }
+        val wrongRecords = sorted.filter { it.timestamp < 1577836800000L }
         if (wrongRecords.isEmpty()) return history
 
-        val offset = now - wrongRecords.last().timestamp
-        return history.map { 
-            if (it.timestamp < 1577836800000L) it.copy(timestamp = it.timestamp + offset) else it
+        val sensorEnd = wrongRecords.last().timestamp
+        val sensorStart = wrongRecords.first().timestamp
+        val sensorSpan = sensorEnd - sensorStart
+
+        // Place the history window so it ends at 'now' and spans the sensor's duration.
+        // If we have a lastDbTimestamp, shift the window forward so it doesn't place
+        // records before the last known good record (avoids gaps on reconnection).
+        val windowEnd = now
+        val windowStart = if (lastDbTimestamp != null) {
+            (windowEnd - sensorSpan).coerceAtLeast(lastDbTimestamp)
+        } else {
+            windowEnd - sensorSpan
+        }
+
+        val correction = windowStart - sensorStart
+        return sorted.map {
+            if (it.timestamp < 1577836800000L) it.copy(timestamp = it.timestamp + correction)
+            else it
         }
     }
 
