@@ -207,6 +207,12 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Text(
+                    "Friendly name shown on dashboard instead of MAC address",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 8.dp, top = 2.dp)
+                )
+                Text(
                     if (lastMac.isNotEmpty()) "MAC: $lastMac" else "No device selected yet.",
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(start = 8.dp, top = 4.dp)
@@ -254,6 +260,12 @@ fun SettingsScreen(
                             shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
                         ) { Text("Fahrenheit (°F)") }
                     }
+                    Text(
+                        "Choose how temperature readings are displayed throughout the app",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 8.dp, top = 4.dp)
+                    )
                 }
                 
                 var scanInterval by remember { mutableStateOf(prefs.scanIntervalSeconds.toString()) }
@@ -267,6 +279,12 @@ fun SettingsScreen(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    "How often the app checks for sensor updates (minimum 30s). Shorter = more responsive, longer = better battery",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 8.dp, top = 2.dp)
                 )
                 
                 val syncModes = listOf("off", "start", "12h", "24h")
@@ -285,6 +303,12 @@ fun SettingsScreen(
                         autoHistorySyncMode = it
                         prefs.autoHistorySyncMode = it
                     }
+                )
+                Text(
+                    "When to download recorded history from the sensor to fill in gaps",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 8.dp, top = 2.dp)
                 )
                 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
@@ -328,6 +352,7 @@ fun SettingsScreen(
                 
                 ListItem(
                     headlineContent = { Text("Enable Alerts System") },
+                    supportingContent = { Text("Get notified when sensor readings cross your configured thresholds") },
                     trailingContent = {
                         Switch(checked = alertsEnabled, onCheckedChange = { alertsEnabled = it; prefs.alertsEnabled = it })
                     },
@@ -339,6 +364,7 @@ fun SettingsScreen(
                     
                     ListItem(
                         headlineContent = { Text("Alert Vibration") },
+                        supportingContent = { Text("Vibrate the device when an alert is triggered") },
                         trailingContent = {
                             Switch(checked = alertVibrationEnabled, onCheckedChange = {
                                 alertVibrationEnabled = it
@@ -365,6 +391,12 @@ fun SettingsScreen(
                             }
                         }
                     )
+                    Text(
+                        "Notify when temperature rises above this value",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 8.dp, top = 2.dp)
+                    )
                     
                     AlertThresholdRow(
                         label = "Low Temperature (°$tempUnit)",
@@ -383,6 +415,12 @@ fun SettingsScreen(
                             }
                         }
                     )
+                    Text(
+                        "Notify when temperature drops below this value",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 8.dp, top = 2.dp)
+                    )
                     
                     AlertThresholdRow(
                         label = "High Humidity (%)",
@@ -397,6 +435,12 @@ fun SettingsScreen(
                             alertHumidityHigh = it
                             it.toIntOrNull()?.let { v -> prefs.alertHumidityHigh = v }
                         }
+                    )
+                    Text(
+                        "Notify when humidity rises above this percentage",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 8.dp, top = 2.dp)
                     )
                     
                     AlertThresholdRow(
@@ -413,6 +457,12 @@ fun SettingsScreen(
                             it.toIntOrNull()?.let { v -> prefs.alertHumidityLow = v }
                         }
                     )
+                    Text(
+                        "Notify when humidity drops below this percentage",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 8.dp, top = 2.dp)
+                    )
                     
                     AlertThresholdRow(
                         label = "Low Battery Threshold (%)",
@@ -427,6 +477,12 @@ fun SettingsScreen(
                             alertBatteryLow = it
                             it.toIntOrNull()?.let { v -> prefs.alertBatteryLow = v }
                         }
+                    )
+                    Text(
+                        "Notify when the sensor battery falls below this level",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 8.dp, top = 2.dp)
                     )
                 }
             }
@@ -483,6 +539,12 @@ fun SettingsScreen(
                         },
                         modifier = Modifier.fillMaxWidth()
                     )
+                    Text(
+                        "Manually set how long before a sensor is marked offline instead of using auto-calculated timeout",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 8.dp, top = 2.dp)
+                    )
                     if (offlineTimeoutOverride) {
                         OutlinedTextField(
                             value = offlineTimeout,
@@ -494,6 +556,12 @@ fun SettingsScreen(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            "Sensor is marked offline if no data received for this long",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 8.dp, top = 2.dp)
                         )
                     }
                 }
@@ -529,6 +597,12 @@ fun SettingsScreen(
                             autoPruningDays = it
                             prefs.autoPruningDays = it
                         }
+                    )
+                    Text(
+                        "Automatically delete history older than this many days to save storage",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 8.dp, top = 2.dp)
                     )
                     
                     Button(
