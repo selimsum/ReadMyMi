@@ -16,13 +16,10 @@ import com.example.readmymi.ui.theme.md_chartHumidity
 import lecho.lib.hellocharts.model.*
 import lecho.lib.hellocharts.view.LineChartView
 import com.example.readmymi.data.SensorEntity
-import java.util.Date
 import java.util.Locale
-import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import kotlin.math.roundToInt
 
 @Composable
 fun SensorChart(
