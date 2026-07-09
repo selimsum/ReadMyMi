@@ -109,4 +109,22 @@ class PrefsManagerTest {
         verify(editor).putBoolean("alerts_enabled", true)
         verify(editor).apply()
     }
+
+    @Test
+    fun `getWasOffline returns stored boolean`() {
+        val mac = "AA:BB:CC:DD:EE:FF"
+        whenever(sharedPreferences.getBoolean(eq("was_offline_$mac"), any())).thenReturn(true)
+
+        val actualWasOffline = prefsManager.getWasOffline(mac)
+        assertEquals(true, actualWasOffline)
+    }
+
+    @Test
+    fun `setWasOffline stores boolean correctly`() {
+        val mac = "AA:BB:CC:DD:EE:FF"
+        prefsManager.setWasOffline(mac, true)
+
+        verify(editor).putBoolean("was_offline_$mac", true)
+        verify(editor).apply()
+    }
 }
