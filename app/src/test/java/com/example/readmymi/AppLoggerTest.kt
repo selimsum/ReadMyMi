@@ -41,7 +41,7 @@ class AppLoggerTest {
 
         // The logs are added to the end of the list, so the last element in the list is the most recent log
         // Let's verify that the oldest log (Message 1) was dropped, and the newest log (Message 501) is present
-        assertTrue("Most recent log should be present", logs.last().contains("Message $overLimit"))
+        assertTrue("Most recent log should be present at the end", logs.last().contains("Message $overLimit"))
         assertTrue("Oldest log should be dropped, second oldest should be present at the beginning", logs.first().contains("Message 2"))
     }
 
