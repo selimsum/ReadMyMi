@@ -626,7 +626,7 @@ fun SettingsScreen(
                                         dateObj.time = item.timestamp
                                         val dateTime = sdf.format(dateObj)
                                         val tempF = item.temperature * 1.8f + 32f
-                                        csvBuilder.append("$dateTime,${item.timestamp},${item.macAddress},${item.temperature},$tempF,${item.humidity},${item.battery}\n")
+                                        csvBuilder.append(dateTime).append(",").append(item.timestamp).append(",").append(item.macAddress).append(",").append(item.temperature).append(",").append(tempF).append(",").append(item.humidity).append(",").append(item.battery).append("\n")
                                     }
                                     val csvString = csvBuilder.toString()
                                     val csvFile = File(context.cacheDir, "sensor_export_${lastMac.replace(":", "_")}.csv")
