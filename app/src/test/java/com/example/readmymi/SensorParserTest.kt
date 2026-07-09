@@ -28,6 +28,24 @@ class SensorParserTest {
         assertEquals(95, result?.battery)
     }
 
+
+    @Test
+    fun testParseBTHome_ShortPayload() {
+        val payload = byteArrayOf(0x40.toByte()) // Only 1 byte, minimum required is 2
+        val serviceData = mapOf("fcd2" to payload)
+
+        val result = SensorParser.parse("TestDevice", "00:11:22:33:44:55", serviceData)
+
+        assertNull(result)
+
+        val emptyPayload = ByteArray(0)
+        val emptyServiceData = mapOf("fcd2" to emptyPayload)
+
+        val emptyResult = SensorParser.parse("TestDevice", "00:11:22:33:44:55", emptyServiceData)
+
+        assertNull(emptyResult)
+    }
+
     @Test
     fun testParseBTHome_Encrypted() {
         // Info byte with encryption bit set (0x01)
