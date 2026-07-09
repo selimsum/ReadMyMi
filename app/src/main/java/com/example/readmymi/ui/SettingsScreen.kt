@@ -30,8 +30,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import com.example.readmymi.SensorForegroundService
 import android.content.Intent
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.time.format.DateTimeFormatter
+import java.time.Instant
+import java.time.ZoneId
 import java.util.Locale
 import com.example.readmymi.TemperatureConverter
 import com.example.readmymi.data.SensorDatabase
@@ -618,13 +619,11 @@ fun SettingsScreen(
                                         Toast.makeText(context, "No history data found for this device", Toast.LENGTH_SHORT).show()
                                         return@launch
                                     }
-                                    val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+                                    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US).withZone(ZoneId.systemDefault())
                                     val csvBuilder = StringBuilder()
                                     csvBuilder.append("DateTime,Timestamp,MAC Address,Temperature(C),Temperature(F),Humidity(%),Battery(%)\n")
-                                    val dateObj = Date()
                                     for (item in history) {
-                                        dateObj.time = item.timestamp
-                                        val dateTime = sdf.format(dateObj)
+                                        val dateTime = formatter.format(Instant.ofEpochMilli(item.timestamp))
                                         val tempF = item.temperature * 1.8f + 32f
                                         csvBuilder.append("$dateTime,${item.timestamp},${item.macAddress},${item.temperature},$tempF,${item.humidity},${item.battery}\n")
                                     }
