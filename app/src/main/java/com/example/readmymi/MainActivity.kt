@@ -227,21 +227,31 @@ fun MainScreen(viewModel: MainViewModel) {
                     onDownloadHistory = { records: Int ->
                         isDownloading = true
                         lifecycleOwner.lifecycleScope.launch {
-                            val manager = BluetoothSensorManager(context)
-                            val history = manager.downloadHistory(sensorData?.macAddress ?: "", records)
-                            if (history.isNotEmpty()) {
-                                database.sensorDao().insertAll(history.map { 
-                                    SensorEntity(
-                                        id = 0,
-                                        macAddress = it.macAddress,
-                                        temperature = it.temperature.toFloat(),
-                                        humidity = it.humidity.toInt(),
-                                        battery = it.battery,
-                                        timestamp = it.timestamp
-                                    )
-                                })
+                            try {
+                                val mac = sensorData?.macAddress ?: ""
+                                val manager = BluetoothSensorManager(context)
+                                val latestDbTimestamp = database.sensorDao().getLatestTimestamp(mac)
+                                val history = manager.downloadHistory(mac, records, latestDbTimestamp)
+                                if (history.isNotEmpty()) {
+                                    database.sensorDao().insertAll(history.map { 
+                                        SensorEntity(
+                                            id = 0,
+                                            macAddress = it.macAddress,
+                                            temperature = it.temperature.toFloat(),
+                                            humidity = it.humidity.toInt(),
+                                            battery = it.battery,
+                                            timestamp = it.timestamp
+                                        )
+                                    })
+                                    Toast.makeText(context, "Successfully downloaded ${history.size} records.", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "No new history records found.", Toast.LENGTH_SHORT).show()
+                                }
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "History sync failed: ${e.message}", Toast.LENGTH_LONG).show()
+                            } finally {
+                                isDownloading = false
                             }
-                            isDownloading = false
                         }
                     }
                 )

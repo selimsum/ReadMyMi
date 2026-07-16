@@ -136,7 +136,9 @@ class BluetoothSensorManager(private val context: Context) {
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
                     g.discoverServices()
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                    completion.complete(true)
+                    if (!completion.isCompleted) {
+                        completion.complete(false)
+                    }
                 }
             }
 
@@ -184,6 +186,7 @@ class BluetoothSensorManager(private val context: Context) {
 
             override fun onCharacteristicChanged(g: BluetoothGatt, char: BluetoothGattCharacteristic, value: ByteArray) {
                 if (value.size == 3 && value[0] == 0x35.toByte() && value[1] == 0.toByte() && value[2] == 0.toByte()) {
+                    completion.complete(true)
                     g.disconnect()
                     return
                 }
@@ -216,13 +219,18 @@ class BluetoothSensorManager(private val context: Context) {
              }
         } else return@withContext emptyList()
         
-        try {
+        val success = try {
             kotlinx.coroutines.withTimeout(60000) { completion.await() }
         } catch (e: TimeoutCancellationException) {
             AppLogger.log("BluetoothSensorManager", "Download timeout: ${e.message}")
+            false
         } finally {
              gatt?.disconnect()
              gatt?.close()
+        }
+
+        if (!success) {
+            throw Exception("Bluetooth connection lost or timed out during history download")
         }
         
         return@withContext fixTimestamps(historyList, lastDbTimestamp)
@@ -240,19 +248,16 @@ class BluetoothSensorManager(private val context: Context) {
         val sensorSpan = sensorEnd - sensorStart
 
         // Place the history window so it ends at 'now' and spans the sensor's duration.
-        // If we have a lastDbTimestamp, shift the window forward so it doesn't place
-        // records before the last known good record (avoids gaps on reconnection).
         val windowEnd = now
-        val windowStart = if (lastDbTimestamp != null) {
-            (windowEnd - sensorSpan).coerceAtLeast(lastDbTimestamp)
-        } else {
-            windowEnd - sensorSpan
-        }
-
+        val windowStart = windowEnd - sensorSpan
         val correction = windowStart - sensorStart
+
         return sorted.map {
             if (it.timestamp < 1577836800000L) it.copy(timestamp = it.timestamp + correction)
             else it
+        }.filter {
+            // Keep only records in the past/present and strictly after lastDbTimestamp
+            it.timestamp <= now && (lastDbTimestamp == null || it.timestamp > lastDbTimestamp)
         }
     }
 
