@@ -7,6 +7,38 @@ import org.junit.Test
 class SensorParserTest {
 
     @Test
+    fun testCalculateBatteryPercentage() {
+        // >= 3000mV
+        assertEquals(100, SensorParser.calculateBatteryPercentage(3100))
+        assertEquals(100, SensorParser.calculateBatteryPercentage(3000))
+
+        // 2900mV - 2999mV
+        assertEquals(90, SensorParser.calculateBatteryPercentage(2950))
+        assertEquals(80, SensorParser.calculateBatteryPercentage(2900))
+
+        // 2800mV - 2899mV
+        assertEquals(65, SensorParser.calculateBatteryPercentage(2850))
+        assertEquals(50, SensorParser.calculateBatteryPercentage(2800))
+
+        // 2700mV - 2799mV
+        assertEquals(35, SensorParser.calculateBatteryPercentage(2750))
+        assertEquals(20, SensorParser.calculateBatteryPercentage(2700))
+
+        // 2500mV - 2699mV
+        assertEquals(12, SensorParser.calculateBatteryPercentage(2600))
+        assertEquals(5, SensorParser.calculateBatteryPercentage(2500))
+
+        // < 2500mV (down to 2100mV)
+        assertEquals(2, SensorParser.calculateBatteryPercentage(2300))
+        assertEquals(0, SensorParser.calculateBatteryPercentage(2100))
+
+        // < 2100mV (edge case)
+        assertEquals(0, SensorParser.calculateBatteryPercentage(2000))
+        assertEquals(0, SensorParser.calculateBatteryPercentage(0))
+        assertEquals(0, SensorParser.calculateBatteryPercentage(-100))
+    }
+
+    @Test
     fun testParseBTHome_ValidPayload() {
         // Mock payload for BTHome
         // Info: 0x40 (unencrypted)
