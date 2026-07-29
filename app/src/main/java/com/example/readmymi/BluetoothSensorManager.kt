@@ -199,12 +199,16 @@ class BluetoothSensorManager(private val context: Context) {
                     val vbat = buffer.getShort(11)
                     val batPct = SensorParser.calculateBatteryPercentage(vbat.toInt())
 
-                    if (temp in -40.0..80.0 && hum in 0.0..100.0 && !(temp == 0.0 && hum == 0.0)) {
+                    val parsedTemp = Math.round(temp * 100) / 100.0
+                    val parsedHum = Math.round(hum * 100) / 100.0
+                    val isDummyRecord = (Math.abs(parsedTemp - 21.12) < 0.05 && Math.abs(parsedHum - 43.0) < 0.5)
+
+                    if (temp in -40.0..80.0 && hum in 0.0..100.0 && !(temp == 0.0 && hum == 0.0) && !isDummyRecord) {
                         historyList.add(SensorData(
                             macAddress = g.device.address,
                             deviceName = g.device.name ?: "",
-                            temperature = Math.round(temp * 100) / 100.0,
-                            humidity = Math.round(hum * 100) / 100.0,
+                            temperature = parsedTemp,
+                            humidity = parsedHum,
                             battery = batPct,
                             timestamp = time
                         ))
@@ -244,14 +248,16 @@ class BluetoothSensorManager(private val context: Context) {
         val now = System.currentTimeMillis()
         val sorted = history.sortedBy { it.timestamp }
         val wrongRecords = sorted.filter { it.timestamp < 1577836800000L }
-        if (wrongRecords.isEmpty()) return history
+        if (wrongRecords.isEmpty()) {
+            return sorted.filter { it.timestamp <= now }
+        }
 
         val sensorEnd = wrongRecords.last().timestamp
         val sensorStart = wrongRecords.first().timestamp
         val sensorSpan = sensorEnd - sensorStart
 
-        // Place the history window so it ends at 'now' and spans the sensor's duration.
-        val windowEnd = now
+        // Place the history window ending slightly before now (e.g. now - 60s)
+        val windowEnd = now - 60000L
         val windowStart = windowEnd - sensorSpan
         val correction = windowStart - sensorStart
 
@@ -259,8 +265,7 @@ class BluetoothSensorManager(private val context: Context) {
             if (it.timestamp < 1577836800000L) it.copy(timestamp = it.timestamp + correction)
             else it
         }.filter {
-            // Keep only records in the past/present and strictly after lastDbTimestamp
-            it.timestamp <= now && (lastDbTimestamp == null || it.timestamp > lastDbTimestamp)
+            it.timestamp <= now
         }
     }
 

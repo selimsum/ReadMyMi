@@ -111,6 +111,9 @@ fun MainScreen(viewModel: MainViewModel) {
     }
 
     LaunchedEffect(Unit) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            database.sensorDao().deleteDummyRecords()
+        }
         val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
         if (bluetoothAdapter == null) {
             Toast.makeText(context, "Bluetooth is not supported on this device.", Toast.LENGTH_LONG).show()
@@ -230,8 +233,7 @@ fun MainScreen(viewModel: MainViewModel) {
                             try {
                                 val mac = sensorData?.macAddress ?: ""
                                 val manager = BluetoothSensorManager(context)
-                                val latestDbTimestamp = database.sensorDao().getLatestTimestamp(mac)
-                                val history = manager.downloadHistory(mac, records, latestDbTimestamp)
+                                val history = manager.downloadHistory(mac, records)
                                 if (history.isNotEmpty()) {
                                     database.sensorDao().insertAll(history.map { 
                                         SensorEntity(
@@ -243,8 +245,10 @@ fun MainScreen(viewModel: MainViewModel) {
                                             timestamp = it.timestamp
                                         )
                                     })
+                                    database.sensorDao().deleteDummyRecords()
                                     Toast.makeText(context, "Successfully downloaded ${history.size} records.", Toast.LENGTH_SHORT).show()
                                 } else {
+                                    database.sensorDao().deleteDummyRecords()
                                     Toast.makeText(context, "No new history records found.", Toast.LENGTH_SHORT).show()
                                 }
                             } catch (e: Exception) {
