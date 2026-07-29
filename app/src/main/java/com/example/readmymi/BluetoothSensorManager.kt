@@ -199,18 +199,21 @@ class BluetoothSensorManager(private val context: Context) {
                     val vbat = buffer.getShort(11)
                     val batPct = SensorParser.calculateBatteryPercentage(vbat.toInt())
 
-                    historyList.add(SensorData(
-                        macAddress = g.device.address,
-                        deviceName = g.device.name ?: "",
-                        temperature = Math.round(temp * 100) / 100.0,
-                        humidity = Math.round(hum * 100) / 100.0,
-                        battery = batPct,
-                        timestamp = time
-                    ))
+                    if (temp in -40.0..80.0 && hum in 0.0..100.0 && !(temp == 0.0 && hum == 0.0)) {
+                        historyList.add(SensorData(
+                            macAddress = g.device.address,
+                            deviceName = g.device.name ?: "",
+                            temperature = Math.round(temp * 100) / 100.0,
+                            humidity = Math.round(hum * 100) / 100.0,
+                            battery = batPct,
+                            timestamp = time
+                        ))
+                    }
                 }
             }
         }
 
+        stopScanning()
         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
              gatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                  device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
@@ -304,6 +307,7 @@ class BluetoothSensorManager(private val context: Context) {
             }
         }
 
+        stopScanning()
         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) return@withContext false
         
         val gatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {

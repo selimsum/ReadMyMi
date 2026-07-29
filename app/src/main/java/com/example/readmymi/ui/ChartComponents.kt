@@ -48,11 +48,12 @@ fun SensorChart(
             }
         },
         update = { chartView ->
-            val sampledData = if (data.size > 500) {
-                val rate = data.size / 250
-                data.filterIndexed { index, _ -> index % rate == 0 || index == data.lastIndex }
+            val validData = data.filter { it.temperature in -40f..80f && it.humidity in 0..100 && !(it.temperature == 0f && it.humidity == 0) }
+            val sampledData = if (validData.size > 500) {
+                val rate = validData.size / 250
+                validData.filterIndexed { index, _ -> index % rate == 0 || index == validData.lastIndex }
             } else {
-                data
+                validData
             }
 
             val minTime = if (sampledData.isNotEmpty()) sampledData.first().timestamp else 0L
@@ -60,8 +61,29 @@ fun SensorChart(
             val duration = maxTime - minTime
 
             val timeFormatter = DateTimeFormatter.ofPattern("dd/MM HH:mm", Locale.getDefault()).withZone(ZoneId.systemDefault())
+            val gapThresholdMs = 45 * 60 * 1000L
 
-            val pointsData = sampledData.mapIndexed { index, item ->
+            val lines = mutableListOf<Line>()
+            var currentSegment = mutableListOf<PointValue>()
+
+            for (index in sampledData.indices) {
+                val item = sampledData[index]
+                if (index > 0 && (item.timestamp - sampledData[index - 1].timestamp) > gapThresholdMs) {
+                    if (currentSegment.isNotEmpty()) {
+                        val segmentLine = Line(ArrayList(currentSegment)).apply {
+                            color = themeColor
+                            isCubic = currentSegment.size > 2
+                            setHasPoints(sampledData.size <= 100 || currentSegment.size == 1)
+                            pointRadius = 4
+                            strokeWidth = if (sampledData.size > 200) 1 else 2
+                            setHasLabels(false)
+                            setHasLabelsOnlyForSelected(true)
+                        }
+                        lines.add(segmentLine)
+                        currentSegment = mutableListOf()
+                    }
+                }
+
                 val yRaw = if (isTemperature) {
                     com.example.readmymi.TemperatureConverter.convert(item.temperature.toDouble(), tempUnit).toFloat()
                 } else {
@@ -75,23 +97,22 @@ fun SensorChart(
                 val unit = if (isTemperature) (if (tempUnit == "F") "°F" else "°C") else "%"
                 val timeStr = timeFormatter.format(Instant.ofEpochMilli(item.timestamp))
                 val labelText = "${String.format(Locale.getDefault(), "%.1f", yRaw)}$unit ($timeStr)"
-                PointValue(xRaw, yRaw).setLabel(labelText.toCharArray())
+                currentSegment.add(PointValue(xRaw, yRaw).setLabel(labelText.toCharArray()))
             }
 
-            // Chart is display-only – no touch interaction
-
-            // Ensure points are technically present for rendering, but minimal if dense
-            val line = Line(pointsData).apply {
-                color = themeColor
-                isCubic = true
-                setHasPoints(sampledData.size <= 100) 
-                pointRadius = 4
-                strokeWidth = if (sampledData.size > 200) 1 else 2
-                setHasLabels(false)
-                setHasLabelsOnlyForSelected(true) // Bubble appears on selection
+            if (currentSegment.isNotEmpty()) {
+                val segmentLine = Line(ArrayList(currentSegment)).apply {
+                    color = themeColor
+                    isCubic = currentSegment.size > 2
+                    setHasPoints(sampledData.size <= 100 || currentSegment.size == 1)
+                    pointRadius = 4
+                    strokeWidth = if (sampledData.size > 200) 1 else 2
+                    setHasLabels(false)
+                    setHasLabelsOnlyForSelected(true)
+                }
+                lines.add(segmentLine)
             }
 
-            val lines = listOf(line)
             val chartData = LineChartData(lines)
 
             // dateFormatter is now hoisted
