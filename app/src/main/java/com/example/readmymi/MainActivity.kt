@@ -233,14 +233,15 @@ fun MainScreen(viewModel: MainViewModel) {
                             try {
                                 val mac = sensorData?.macAddress ?: ""
                                 val manager = BluetoothSensorManager(context)
-                                val history = manager.downloadHistory(mac, records)
+                                val latestTs = database.sensorDao().getLatestTimestamp(mac)
+                                val history = manager.downloadHistory(mac, records, lastDbTimestamp = latestTs)
                                 if (history.isNotEmpty()) {
                                     database.sensorDao().insertAll(history.map { 
                                         SensorEntity(
                                             id = 0,
                                             macAddress = it.macAddress,
                                             temperature = it.temperature.toFloat(),
-                                            humidity = it.humidity.toInt(),
+                                            humidity = it.humidity.toFloat(),
                                             battery = it.battery,
                                             timestamp = it.timestamp
                                         )

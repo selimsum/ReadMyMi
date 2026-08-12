@@ -34,6 +34,8 @@ class SensorForegroundService : Service() {
         private const val HISTORY_RECORD_INTERVAL_MS = 10 * 60 * 1000L
         private const val DEFAULT_HISTORY_RECORDS = 70
         private const val MAX_HISTORY_RECORDS = 512
+        private const val ALERT_RE_ARM_INTERVAL_MS = 60 * 60 * 1000L
+        private const val WAKE_LOCK_TIMEOUT_MS = 4 * 60 * 60 * 1000L
         @Volatile
         var isServiceRunning = false
         val isServiceRunningFlow = kotlinx.coroutines.flow.MutableStateFlow(false)
@@ -60,6 +62,7 @@ class SensorForegroundService : Service() {
 
     private val latestReadings = ConcurrentHashMap<String, SensorData>()
     private val historyCheckedMap = ConcurrentHashMap.newKeySet<String>()
+    private var lastWakeLockAcquire = 0L
     
     // Flag to control service loop (Accessed via Companion for UI)
 
@@ -115,7 +118,8 @@ class SensorForegroundService : Service() {
         // Acquire WakeLock for reliable background scanning
         val powerManager = getSystemService(PowerManager::class.java)
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ReadMyMi::ScanWakeLock")
-        wakeLock?.acquire(4 * 60 * 60 * 1000L) // Safety timeout: 4 hours
+        wakeLock?.acquire(WAKE_LOCK_TIMEOUT_MS) // Safety timeout: 4 hours
+        lastWakeLockAcquire = System.currentTimeMillis()
 
         database = SensorDatabase.getDatabase(this)
         prefs = PrefsManager(this)
@@ -174,6 +178,7 @@ class SensorForegroundService : Service() {
 
     private suspend fun runServiceLoop() {
         while (isServiceRunning) {
+            ensureWakeLock()
             val scanStartTime = System.currentTimeMillis()
             performScan()
             
@@ -183,6 +188,16 @@ class SensorForegroundService : Service() {
             performAutoPruning()
             
             runSleepLoop()
+        }
+    }
+
+    // The initial acquire() carries a 4h safety timeout, so it can expire while the
+    // service is running for days. Re-acquire it at the start of every loop iteration.
+    private fun ensureWakeLock() {
+        val lock = wakeLock ?: return
+        if (!lock.isHeld && System.currentTimeMillis() - lastWakeLockAcquire >= WAKE_LOCK_TIMEOUT_MS) {
+            lock.acquire(WAKE_LOCK_TIMEOUT_MS)
+            lastWakeLockAcquire = System.currentTimeMillis()
         }
     }
 
@@ -212,7 +227,10 @@ class SensorForegroundService : Service() {
 
             fun maybeAlert(key: String, title: String, message: String) {
                 val alertedKey = "$mac:$key"
-                if (!lastAlertMap.containsKey(alertedKey)) {
+                val lastAlertAt = lastAlertMap[alertedKey]
+                // Fire on the first occurrence, then re-arm after the cooldown interval
+                // so a condition that persists is re-notified periodically.
+                if (lastAlertAt == null || now - lastAlertAt >= ALERT_RE_ARM_INTERVAL_MS) {
                     lastAlertMap[alertedKey] = now
                     val notifId = alertKeyIds.getOrPut(alertedKey) { alertIdCounter++ }
                     sendAlertNotification(notifId, title, "$devName: $message")
@@ -254,7 +272,7 @@ class SensorForegroundService : Service() {
         val notification = NotificationCompat.Builder(this, ALERTS_CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(text)
-            .setSmallIcon(R.drawable.ic_app_logo_png)
+            .setSmallIcon(R.drawable.ic_stat_thermometer)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -395,7 +413,7 @@ class SensorForegroundService : Service() {
                 if (latestDbTimestamp == null || missingDuration > HISTORY_GAP_THRESHOLD_MS) {
                     val recordsToDownload = estimateHistoryRecordCount(missingDuration, latestDbTimestamp == null)
                     AppLogger.log("Service", "Syncing history ($mode). Downloading up to $recordsToDownload records, missingSince=$missingSince...")
-                    val history = bluetoothSensorManager.downloadHistory(mac, records = recordsToDownload) { AppLogger.log("BLE", it) }
+                    val history = bluetoothSensorManager.downloadHistory(mac, records = recordsToDownload, lastDbTimestamp = latestDbTimestamp) { AppLogger.log("BLE", it) }
 
                     val missingHistory = history
                         .asSequence()
@@ -436,7 +454,7 @@ class SensorForegroundService : Service() {
                 SensorEntity(
                     macAddress = record.macAddress,
                     temperature = record.temperature.toFloat(),
-                    humidity = record.humidity.toInt(),
+                    humidity = record.humidity.toFloat(),
                     battery = record.battery,
                     timestamp = record.timestamp
                 )
@@ -448,7 +466,7 @@ class SensorForegroundService : Service() {
     }
 
     private fun updateLiveNotification(it: SensorData) {
-        val tempStr = String.format(java.util.Locale.GERMANY, "%.1f", it.temperature)
+        val tempStr = String.format(java.util.Locale.getDefault(), "%.1f", it.temperature)
         val humStr = PercentFormatter.format(it.humidity)
         val devName = prefs.getDeviceName(it.macAddress)
         val isHappy = it.temperature in 21.0..26.0 && it.humidity in 30.0..60.0
@@ -472,7 +490,7 @@ class SensorForegroundService : Service() {
         return NotificationCompat.Builder(this, channelId)
             .setContentTitle(title)
             .setContentText(text)
-            .setSmallIcon(R.drawable.ic_app_logo_png)
+            .setSmallIcon(R.drawable.ic_stat_thermometer)
             .setContentIntent(pendingIntent)
             .setSilent(true)
             .setPriority(priority)
@@ -499,7 +517,7 @@ class SensorForegroundService : Service() {
             dbSaveBuffer.add(SensorEntity(
                 macAddress = it.macAddress,
                 temperature = it.temperature.toFloat(),
-                humidity = it.humidity.toInt(),
+                humidity = it.humidity.toFloat(),
                 battery = it.battery,
                 timestamp = it.timestamp
             ))

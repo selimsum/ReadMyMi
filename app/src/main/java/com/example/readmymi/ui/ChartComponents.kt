@@ -50,9 +50,9 @@ fun SensorChart(
         update = { chartView ->
             val validData = data.filter {
                 it.temperature in -40f..80f &&
-                it.humidity in 0..100 &&
-                !(it.temperature == 0f && it.humidity == 0) &&
-                !(Math.abs(it.temperature - 21.12f) < 0.05f && Math.abs(it.humidity - 43) < 1)
+                it.humidity in 0f..100f &&
+                !(it.temperature == 0f && it.humidity == 0f) &&
+                !(Math.abs(it.temperature - 21.12f) < 0.05f && Math.abs(it.humidity - 43f) < 1f)
             }
             val sampledData = if (validData.size > 500) {
                 val rate = validData.size / 250

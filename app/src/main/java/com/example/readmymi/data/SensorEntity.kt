@@ -9,7 +9,7 @@ data class SensorEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val macAddress: String,
     val temperature: Float,
-    val humidity: Int,
+    val humidity: Float,
     val battery: Int,
     val timestamp: Long
 ) {

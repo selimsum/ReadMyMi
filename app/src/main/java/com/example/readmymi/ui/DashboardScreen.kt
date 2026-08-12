@@ -198,7 +198,15 @@ fun HistoryChartCard(macAddress: String, database: SensorDatabase) {
     val tempUnit = prefs.tempUnit
 
     var timeFilter by remember { mutableStateOf(0) }
-    val endTime by remember(timeFilter) { mutableStateOf(System.currentTimeMillis()) }
+    var endTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    // Keep endTime moving so newly stored readings appear without changing the filter.
+    LaunchedEffect(timeFilter) {
+        endTime = System.currentTimeMillis()
+        while (true) {
+            kotlinx.coroutines.delay(60_000)
+            endTime = System.currentTimeMillis()
+        }
+    }
     val (startTime, _) = getTimeFilterBounds(timeFilter, endTime)
     
     val historyData by database.sensorDao().getHistory(macAddress, startTime, endTime).collectAsState(initial = emptyList())

@@ -131,22 +131,25 @@ class SensorParserTest {
 
     @Test
     fun testParseATC_ValidPayload() {
-        // Payload must be >= 12 bytes
+        // Payload must be >= 12 bytes (12-byte ATC format):
         // Temp at offset 6: value 2150 (21.5C) -> 2150 is 0x0866 -> LE: 66 08
-        // Hum at offset 8: value 55 (55%) -> 0x37
-        // Batt at offset 9: value 80 (80%) -> 0x50
+        // Hum at offset 8 (uint16): value 5500 (55.0%) -> 5500 is 0x157C -> LE: 7C 15
+        // Voltage at offset 10 (uint16): value 2800 (2.8V) -> 0x0AF0 -> LE: F0 0A
+        // Battery is derived from voltage -> 50%
         val payload = ByteArray(12)
         payload[6] = 0x66.toByte()
         payload[7] = 0x08.toByte()
-        payload[8] = 0x37.toByte()
-        payload[9] = 0x50.toByte()
+        payload[8] = 0x7C.toByte()
+        payload[9] = 0x15.toByte()
+        payload[10] = 0xF0.toByte()
+        payload[11] = 0x0A.toByte()
         val serviceData = mapOf("181a" to payload)
 
         val result = SensorParser.parse("TestDevice", "00:11:22:33:44:55", serviceData)
 
         assertEquals(21.5, result?.temperature)
         assertEquals(55.0, result?.humidity)
-        assertEquals(80, result?.battery)
+        assertEquals(50, result?.battery)
     }
 
     @Test
@@ -256,6 +259,47 @@ class SensorParserTest {
         val result = SensorParser.parse("TestDevice", "00:11:22:33:44:55", serviceData)
 
         assertNull(result)
+    }
+
+    @Test
+    fun testParseBTHome_ExtendedTypeIds() {
+        // BTHome v2 extended type IDs: 0x10 (temp, sint16, 0.01) and 0x11 (humidity, uint16, 0.01)
+        // Info: 0x40
+        // Temp: type 0x10, value 2350 (23.5C) -> 0x092E -> LE: 2E 09
+        // Hum: type 0x11, value 4500 (45.0%) -> 0x1194 -> LE: 94 11
+        val payload = byteArrayOf(
+            0x40.toByte(),
+            0x10.toByte(), 0x2E.toByte(), 0x09.toByte(),
+            0x11.toByte(), 0x94.toByte(), 0x11.toByte()
+        )
+        val serviceData = mapOf("fcd2" to payload)
+
+        val result = SensorParser.parse("TestDevice", "00:11:22:33:44:55", serviceData)
+
+        assertEquals(23.5, result?.temperature)
+        assertEquals(45.0, result?.humidity)
+        assertEquals(0, result?.battery)
+    }
+
+    @Test
+    fun testParseATC_NoBatteryByte() {
+        // 12-byte ATC payload with only temperature, humidity, and voltage.
+        // No battery percentage byte exists in this format; battery derives from voltage.
+        // Temp at offset 6: 2150 (21.5C) -> LE: 66 08
+        // Hum at offset 8 (uint16): 5500 (55.0%) -> LE: 7C 15
+        // Voltage at offset 10 (uint16): 0 -> no voltage reported
+        val payload = ByteArray(12)
+        payload[6] = 0x66.toByte()
+        payload[7] = 0x08.toByte()
+        payload[8] = 0x7C.toByte()
+        payload[9] = 0x15.toByte()
+        val serviceData = mapOf("181a" to payload)
+
+        val result = SensorParser.parse("TestDevice", "00:11:22:33:44:55", serviceData)
+
+        assertEquals(21.5, result?.temperature)
+        assertEquals(55.0, result?.humidity)
+        assertEquals(0, result?.battery)
     }
 
     @Test

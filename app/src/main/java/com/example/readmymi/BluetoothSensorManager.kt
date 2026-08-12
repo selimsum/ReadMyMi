@@ -149,8 +149,13 @@ class BluetoothSensorManager(private val context: Context) {
                     if (char != null) {
                         g.setCharacteristicNotification(char, true)
                         val desc = char.getDescriptor(UUID.fromString(DESC_UUID))
-                        desc.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                        g.writeDescriptor(desc)
+                        if (desc != null) {
+                            desc.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                            g.writeDescriptor(desc)
+                        } else {
+                            AppLogger.log("BluetoothSensorManager", "Notification descriptor not found")
+                            g.disconnect()
+                        }
                     } else {
                         g.disconnect()
                     }
@@ -256,8 +261,10 @@ class BluetoothSensorManager(private val context: Context) {
         val sensorStart = wrongRecords.first().timestamp
         val sensorSpan = sensorEnd - sensorStart
 
-        // Place the history window ending slightly before now (e.g. now - 60s)
-        val windowEnd = now - 60000L
+        // Place the history window ending shortly before now (e.g. now - 60s), but never
+        // before the last record we already have in the database, so corrected records
+        // fill the gap instead of overwriting previously stored history.
+        val windowEnd = maxOf(now - 60000L, lastDbTimestamp ?: 0L)
         val windowStart = windowEnd - sensorSpan
         val correction = windowStart - sensorStart
 

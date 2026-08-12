@@ -21,7 +21,7 @@ It runs passively as a foreground service to provide real-time updates and histo
   - **BTHome** (v1/v2 - unencrypted temperature, humidity, voltage, and battery percentages)
   - **ATC** (Custom custom firmware formats for Mijia LYWSD03MMC sensors, e.g., puzankov/atc1441)
   - **Xiaomi Mijia** (Standard advertising payloads for temperature/humidity/battery)
-- 📊 **Rich Dashboard:** High-fidelity interactive charts using Canvas APIs to visualize temperature and humidity trends.
+- 📊 **Rich Dashboard:** High-fidelity interactive charts (via HelloCharts) to visualize temperature and humidity trends.
 - 💾 **Local History:** Fully local database storage powered by **Room DB** so your environmental history never leaves your device.
 - ⏳ **Direct History Downloading:** Remotely fetch stored logs directly from compatible custom BLE sensors.
 - ⚙️ **Customizable Settings:** Define time filters, temperature units (Celsius/Fahrenheit), view sensor connection states, and clear caches.
@@ -34,7 +34,7 @@ It runs passively as a foreground service to provide real-time updates and histo
 - **UI Framework:** Jetpack Compose (Material 3)
 - **Database:** Android Room Persistence Library
 - **Background Processing:** Android Foreground Services with notification channels
-- **Dependency Management:** Gradle Kotlin DSL / Version Catalog
+- **Dependency Management:** Gradle (Groovy DSL)
 - **Concurrency:** Kotlin Coroutines & Flow
 
 ---

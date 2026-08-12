@@ -11,8 +11,6 @@ object SensorParser {
     private const val MAX_HUM = 100.0
     private const val ROUNDING_MULTIPLIER = 100.0
     
-    private const val MIN_VOLTAGE_MV = 2100
-
     fun calculateBatteryPercentage(voltageMv: Int): Int {
         return when {
             voltageMv >= 3000 -> 100
@@ -79,13 +77,13 @@ object SensorParser {
                     rawBattPct = data[i].toUByte().toInt()
                     i += 1 
                 }
-                0x02 -> { // Temp (int16, 0.01)
+                0x02, 0x10 -> { // Temp (int16, 0.01)
                     if (i + 1 < data.size) {
                         temp = readInt16LE(data, i) * 0.01
                         i += 2
                     } else break
                 }
-                0x03 -> { // Hum (uint16, 0.01)
+                0x03, 0x11 -> { // Hum (uint16, 0.01)
                     if (i + 1 < data.size) {
                         hum = readUInt16LE(data, i) * 0.01
                         i += 2
@@ -99,7 +97,6 @@ object SensorParser {
                     }
                     i += 2
                 }
-                0x00, 0x10, 0x11 -> i += 1
                 else -> break // Unknown type, stop parsing to avoid desync
             }
         }
@@ -119,11 +116,8 @@ object SensorParser {
         val tempBE = ((data[6].toInt() shl 8) or (data[7].toUByte().toInt())) / 100.0
         val temp = if (tempLE in -40.0..80.0) tempLE else tempBE
 
-        val hum = if (data.size >= 13) {
-            readUInt16LE(data, 8) / 100.0
-        } else {
-            data[8].toUByte().toInt().toDouble()
-        }
+        // Humidity is a uint16 (0.01% resolution) at offsets 8-9 in both the 12- and 13-byte ATC formats.
+        val hum = readUInt16LE(data, 8) / 100.0
         
         val vbatLE = readUInt16LE(data, 10)
         val vbatBE = ((data[10].toUByte().toInt() shl 8) or data[11].toUByte().toInt()) and 0xFFFF
@@ -133,14 +127,14 @@ object SensorParser {
             else -> 0
         }
         
-        val rawPct = if (data.size >= 13) data[12].toUByte().toInt() else data[9].toUByte().toInt()
+        val rawPct = if (data.size >= 13) data[12].toUByte().toInt() else null
         val batt = if (vbat > 0) {
             calculateBatteryPercentage(vbat)
         } else {
-            rawPct
+            rawPct ?: 0
         }
         
-        AppLogger.log("Parser", "ATC parsed $mac: tempLE=$tempLE tempBE=$tempBE hum=$hum vbatLE=$vbatLE vbatBE=$vbatBE vbat=$vbat -> calculated=${if (vbat > 0) batt else "N/A"}, rawPct=$rawPct -> final=$batt%")
+        AppLogger.log("Parser", "ATC parsed $mac: tempLE=$tempLE tempBE=$tempBE hum=$hum vbatLE=$vbatLE vbatBE=$vbatBE vbat=$vbat -> calculated=${if (vbat > 0) batt else "N/A"}, rawPct=${rawPct ?: "N/A"} -> final=$batt%")
         
         return createSensorData(mac, name, temp, hum, batt)
     }
