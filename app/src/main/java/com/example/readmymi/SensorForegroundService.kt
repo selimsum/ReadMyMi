@@ -226,11 +226,11 @@ class SensorForegroundService : Service() {
 
             // Temperature alerts
             if (prefs.alertTempHighEnabled && data.temperature > prefs.alertTempHigh) {
-                maybeAlert("temp_high", "High Temperature", "${String.format("%.1f", data.temperature)}C > ${prefs.alertTempHigh}C")
+                maybeAlert("temp_high", "High Temperature", "${String.format("%.1f", data.temperature)}°C > ${prefs.alertTempHigh}°C")
             } else { clearAlert("temp_high") }
 
             if (prefs.alertTempLowEnabled && data.temperature < prefs.alertTempLow) {
-                maybeAlert("temp_low", "Low Temperature", "${String.format("%.1f", data.temperature)}C < ${prefs.alertTempLow}C")
+                maybeAlert("temp_low", "Low Temperature", "${String.format("%.1f", data.temperature)}°C < ${prefs.alertTempLow}°C")
             } else { clearAlert("temp_low") }
 
             // Humidity alerts
