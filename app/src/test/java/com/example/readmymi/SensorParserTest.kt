@@ -303,6 +303,27 @@ class SensorParserTest {
     }
 
     @Test
+    fun testParseATC_SingleByteHumidity() {
+        // 12-byte ATC-style payload with single-byte humidity and battery percentage
+        // (pvvx-style layout, no uint16 humidity, no voltage):
+        // Temp at offset 6: 2150 (21.5C) -> LE: 66 08
+        // Hum at offset 8: 55 (55%) -> 0x37
+        // Battery at offset 9: 80 (80%) -> 0x50
+        val payload = ByteArray(12)
+        payload[6] = 0x66.toByte()
+        payload[7] = 0x08.toByte()
+        payload[8] = 0x37.toByte()
+        payload[9] = 0x50.toByte()
+        val serviceData = mapOf("181a" to payload)
+
+        val result = SensorParser.parse("TestDevice", "00:11:22:33:44:55", serviceData)
+
+        assertEquals(21.5, result?.temperature)
+        assertEquals(55.0, result?.humidity)
+        assertEquals(80, result?.battery)
+    }
+
+    @Test
     fun testParse_ExceptionHandling() {
         // For BTHome, say it says temp is 2 bytes but payload ends early
         val payload = byteArrayOf(

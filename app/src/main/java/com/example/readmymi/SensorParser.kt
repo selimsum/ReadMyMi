@@ -116,8 +116,15 @@ object SensorParser {
         val tempBE = ((data[6].toInt() shl 8) or (data[7].toUByte().toInt())) / 100.0
         val temp = if (tempLE in -40.0..80.0) tempLE else tempBE
 
-        // Humidity is a uint16 (0.01% resolution) at offsets 8-9 in both the 12- and 13-byte ATC formats.
-        val hum = readUInt16LE(data, 8) / 100.0
+        // Humidity: 13-byte ATC payloads carry a uint16 (0.01% resolution) at offsets 8-9.
+        // 12-byte payloads are ambiguous: some broadcast uint16 humidity there, while others
+        // (pvvx-style 12-byte ATC) use a single humidity byte at 8 and a battery percentage
+        // byte at 9. Treat offsets 8-9 as uint16 only if byte 9 is small enough to be the
+        // high byte of a valid reading and the uint16 decodes to a sane range.
+        val uint16Humidity = readUInt16LE(data, 8) / 100.0
+        val usesUint16Humidity = data.size >= 13 ||
+            (data[9].toUByte().toInt() <= 0x27 && uint16Humidity in 0.0..100.0)
+        val hum = if (usesUint16Humidity) uint16Humidity else data[8].toUByte().toInt().toDouble()
         
         val vbatLE = readUInt16LE(data, 10)
         val vbatBE = ((data[10].toUByte().toInt() shl 8) or data[11].toUByte().toInt()) and 0xFFFF
@@ -127,7 +134,11 @@ object SensorParser {
             else -> 0
         }
         
-        val rawPct = if (data.size >= 13) data[12].toUByte().toInt() else null
+        val rawPct = when {
+            data.size >= 13 -> data[12].toUByte().toInt()
+            usesUint16Humidity -> null
+            else -> data[9].toUByte().toInt()
+        }
         val batt = if (vbat > 0) {
             calculateBatteryPercentage(vbat)
         } else {
