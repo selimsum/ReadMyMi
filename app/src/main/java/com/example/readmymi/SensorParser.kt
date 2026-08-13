@@ -37,19 +37,23 @@ object SensorParser {
             val uuidString = uuid.lowercase()
             val hexData = data.joinToString("") { "%02x".format(it) }
             
-            try {
-                val parsed = when {
+            val parsed = try {
+                when {
                     uuidString.contains("fcd2") -> parseBThome(macAddress, deviceName, data)
                     uuidString.contains("181a") || deviceName.contains("ATC", true) -> parseATC(macAddress, deviceName, data)
                     uuidString.contains("fe95") -> parseXiaomi(macAddress, deviceName, data)
                     else -> null
                 }
-                if (parsed != null) {
-                    AppLogger.log("Parser", "SUCCESS parsed $deviceName ($macAddress) via UUID $uuidString: temp=${parsed.temperature}°C hum=${parsed.humidity}% batt=${parsed.battery}% (raw: $hexData)")
-                    return parsed
-                }
             } catch (e: Exception) {
                 AppLogger.log("Parser", "ERROR parsing $deviceName ($macAddress) via UUID $uuidString (raw: $hexData): ${e.message}")
+                null
+            }
+            if (parsed != null) {
+                AppLogger.log("Parser", "SUCCESS parsed $deviceName ($macAddress) via UUID $uuidString: temp=${parsed.temperature}°C hum=${parsed.humidity}% batt=${parsed.battery}% (raw: $hexData)")
+                return parsed
+            }
+            if (uuidString.contains("181a") || uuidString.contains("fcd2") || uuidString.contains("fe95")) {
+                AppLogger.log("Parser", "REJECTED $deviceName ($macAddress) via UUID $uuidString (${data.size}B raw: $hexData)")
             }
         }
         return null
@@ -73,17 +77,18 @@ object SensorParser {
             if (i >= data.size) break
 
             when (typeId) {
+                0x00 -> i += 1 // Packet ID (uint8) - skip value, keep parsing
                 0x01 -> { 
                     rawBattPct = data[i].toUByte().toInt()
                     i += 1 
                 }
-                0x02, 0x10 -> { // Temp (int16, 0.01)
+                0x02 -> { // Temp (int16, 0.01)
                     if (i + 1 < data.size) {
                         temp = readInt16LE(data, i) * 0.01
                         i += 2
                     } else break
                 }
-                0x03, 0x11 -> { // Hum (uint16, 0.01)
+                0x03 -> { // Hum (uint16, 0.01)
                     if (i + 1 < data.size) {
                         hum = readUInt16LE(data, i) * 0.01
                         i += 2
@@ -97,6 +102,7 @@ object SensorParser {
                     }
                     i += 2
                 }
+                0x10, 0x11 -> i += 1 // Power / Opening (uint8, binary sensor) - not temp/hum
                 else -> break // Unknown type, stop parsing to avoid desync
             }
         }
@@ -191,8 +197,14 @@ object SensorParser {
     }
 
     private fun createSensorData(mac: String, name: String, temp: Double, hum: Double, batt: Int): SensorData? {
-        if (temp < MIN_TEMP || temp > MAX_TEMP || hum < MIN_HUM || hum > MAX_HUM) return null
-        if (temp == 0.0 && hum == 0.0) return null
+        if (temp < MIN_TEMP || temp > MAX_TEMP || hum < MIN_HUM || hum > MAX_HUM) {
+            AppLogger.log("Parser", "REJECTED $name ($mac): values out of range (temp=$temp hum=$hum batt=$batt)")
+            return null
+        }
+        if (temp == 0.0 && hum == 0.0) {
+            AppLogger.log("Parser", "REJECTED $name ($mac): both temp and hum are zero")
+            return null
+        }
         
         return SensorData(
             macAddress = mac,

@@ -262,23 +262,62 @@ class SensorParserTest {
     }
 
     @Test
-    fun testParseBTHome_ExtendedTypeIds() {
-        // BTHome v2 extended type IDs: 0x10 (temp, sint16, 0.01) and 0x11 (humidity, uint16, 0.01)
-        // Info: 0x40
-        // Temp: type 0x10, value 2350 (23.5C) -> 0x092E -> LE: 2E 09
-        // Hum: type 0x11, value 4500 (45.0%) -> 0x1194 -> LE: 94 11
+    fun testParseBTHome_PacketIdPreamble() {
+        // pvvx ATC firmware BTHome data1 variant (alternates with data2):
+        // 0x40 info, 0x00 packet id (0x7b), then battery/temp/humidity
+        // Batt: type 0x01, value 80
+        // Temp: type 0x02, value 2350 (23.5C) -> 0x092E -> LE: 2E 09
+        // Hum: type 0x03, value 5500 (55.0%) -> 0x157C -> LE: 7C 15
         val payload = byteArrayOf(
             0x40.toByte(),
-            0x10.toByte(), 0x2E.toByte(), 0x09.toByte(),
-            0x11.toByte(), 0x94.toByte(), 0x11.toByte()
+            0x00.toByte(), 0x7B.toByte(),
+            0x01.toByte(), 80.toByte(),
+            0x02.toByte(), 0x2E.toByte(), 0x09.toByte(),
+            0x03.toByte(), 0x7C.toByte(), 0x15.toByte()
+        )
+        val serviceData = mapOf("fcd2" to payload)
+
+        val result = SensorParser.parse("ATC_BE9C3E", "A4:C1:38:BE:9C:3E", serviceData)
+
+        assertEquals(23.5, result?.temperature)
+        assertEquals(55.0, result?.humidity)
+        assertEquals(80, result?.battery)
+    }
+
+    @Test
+    fun testParseBTHome_PvvxData2Variant_NoTempHum() {
+        // pvvx ATC firmware BTHome data2 variant (alternates with data1):
+        // 0x40 info, 0x00 packet id (0x7b), 0x0c voltage (2893mV),
+        // 0x10 power off, 0x11 opening open. No temp/hum in this variant,
+        // so it must not be displayed (device appears via data1 variant).
+        val payload = byteArrayOf(
+            0x40.toByte(),
+            0x00.toByte(), 0x7B.toByte(),
+            0x0C.toByte(), 0x4D.toByte(), 0x0B.toByte(),
+            0x10.toByte(), 0x00.toByte(),
+            0x11.toByte(), 0x01.toByte()
+        )
+        val serviceData = mapOf("fcd2" to payload)
+
+        val result = SensorParser.parse("ATC_BE9C3E", "A4:C1:38:BE:9C:3E", serviceData)
+
+        assertNull(result)
+    }
+
+    @Test
+    fun testParseBTHome_PowerAndOpeningAreNotTempHum() {
+        // Official BTHome v2: 0x10 = power (uint8), 0x11 = opening (uint8).
+        // They must not be decoded as temperature/humidity.
+        val payload = byteArrayOf(
+            0x40.toByte(),
+            0x10.toByte(), 0x01.toByte(),
+            0x11.toByte(), 0x00.toByte()
         )
         val serviceData = mapOf("fcd2" to payload)
 
         val result = SensorParser.parse("TestDevice", "00:11:22:33:44:55", serviceData)
 
-        assertEquals(23.5, result?.temperature)
-        assertEquals(45.0, result?.humidity)
-        assertEquals(0, result?.battery)
+        assertNull(result)
     }
 
     @Test

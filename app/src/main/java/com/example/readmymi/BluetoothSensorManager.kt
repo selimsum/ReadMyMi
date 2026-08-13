@@ -66,6 +66,8 @@ class BluetoothSensorManager(private val context: Context) {
             val scanRecord = result.scanRecord ?: return
             
             val serviceData = scanRecord.serviceData.mapKeys { it.key.uuid.toString() }
+            val details = serviceData.entries.joinToString(" | ") { (k, v) -> "$k:${v.joinToString("") { "%02x".format(it) }}" }
+            AppLogger.log("BLE", "SCAN ${device.name ?: "(unnamed)"} ${device.address} rssi=${result.rssi} data=[$details]")
             val data = SensorParser.parse(device.name ?: "", device.address, serviceData)
             
             if (data != null) {
