@@ -60,6 +60,15 @@ class PrefsManager(context: Context) {
         prefs.edit().putBoolean("was_offline_$mac", offline).apply()
     }
 
+    /** Returns whether an alert is currently active (fired and not yet cleared) for a device+alert key. */
+    fun isAlertActive(mac: String, key: String): Boolean {
+        return prefs.getBoolean("alert_active_$mac:$key", false)
+    }
+
+    fun setAlertActive(mac: String, key: String, active: Boolean) {
+        prefs.edit().putBoolean("alert_active_$mac:$key", active).apply()
+    }
+
     fun getDeviceName(mac: String): String {
         return prefs.getString("name_$mac", mac) ?: mac
     }

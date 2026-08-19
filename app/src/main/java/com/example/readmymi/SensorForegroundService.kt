@@ -34,7 +34,6 @@ class SensorForegroundService : Service() {
         private const val HISTORY_RECORD_INTERVAL_MS = 10 * 60 * 1000L
         private const val DEFAULT_HISTORY_RECORDS = 70
         private const val MAX_HISTORY_RECORDS = 512
-        private const val ALERT_RE_ARM_INTERVAL_MS = 60 * 60 * 1000L
         private const val WAKE_LOCK_TIMEOUT_MS = 4 * 60 * 60 * 1000L
         @Volatile
         var isServiceRunning = false
@@ -53,7 +52,6 @@ class SensorForegroundService : Service() {
     private lateinit var database: SensorDatabase
     private lateinit var prefs: PrefsManager
     private val lastDbSaveMap = ConcurrentHashMap<String, Long>() // Throttle DB saves
-    private val lastAlertMap = ConcurrentHashMap<String, Long>() // Throttle alert notifications (per alert key)
     private val dbSaveBuffer = java.util.concurrent.ConcurrentLinkedQueue<SensorEntity>()
     private var lastDbBatchSaveTime = 0L
     private var lastVibrationEnabled = true
@@ -220,50 +218,57 @@ class SensorForegroundService : Service() {
     }
 
     private fun checkAlerts(prefs: PrefsManager) {
-        val now = System.currentTimeMillis()
-
         latestReadings.forEach { (mac, data) ->
             val devName = prefs.getDeviceName(mac)
 
-            fun maybeAlert(key: String, title: String, message: String) {
+            // Edge-triggered alert: fires once on the rising edge (below -> above the
+            // threshold) and only re-arms after the value returns below the threshold.
+            // The active state is persisted in prefs, so service restarts do not re-fire.
+            fun maybeAlert(key: String, title: String, message: String, active: Boolean) {
                 val alertedKey = "$mac:$key"
-                val lastAlertAt = lastAlertMap[alertedKey]
-                // Fire on the first occurrence, then re-arm after the cooldown interval
-                // so a condition that persists is re-notified periodically.
-                if (lastAlertAt == null || now - lastAlertAt >= ALERT_RE_ARM_INTERVAL_MS) {
-                    lastAlertMap[alertedKey] = now
+                val wasActive = prefs.isAlertActive(mac, key)
+                if (active && !wasActive) {
+                    prefs.setAlertActive(mac, key, true)
                     val notifId = alertKeyIds.getOrPut(alertedKey) { alertIdCounter++ }
                     sendAlertNotification(notifId, title, "$devName: $message")
                     AppLogger.log("Alert", "[$devName] $message")
+                } else if (!active && wasActive) {
+                    prefs.setAlertActive(mac, key, false)
                 }
             }
 
-            fun clearAlert(key: String) {
-                lastAlertMap.remove("$mac:$key")
-            }
-
             // Temperature alerts
-            if (prefs.alertTempHighEnabled && data.temperature > prefs.alertTempHigh) {
-                maybeAlert("temp_high", "High Temperature", "${String.format("%.1f", data.temperature)}°C > ${prefs.alertTempHigh}°C")
-            } else { clearAlert("temp_high") }
+            maybeAlert(
+                "temp_high", "High Temperature",
+                "${String.format("%.1f", data.temperature)}°C > ${prefs.alertTempHigh}°C",
+                prefs.alertTempHighEnabled && data.temperature > prefs.alertTempHigh
+            )
 
-            if (prefs.alertTempLowEnabled && data.temperature < prefs.alertTempLow) {
-                maybeAlert("temp_low", "Low Temperature", "${String.format("%.1f", data.temperature)}°C < ${prefs.alertTempLow}°C")
-            } else { clearAlert("temp_low") }
+            maybeAlert(
+                "temp_low", "Low Temperature",
+                "${String.format("%.1f", data.temperature)}°C < ${prefs.alertTempLow}°C",
+                prefs.alertTempLowEnabled && data.temperature < prefs.alertTempLow
+            )
 
             // Humidity alerts
-            if (prefs.alertHumidityHighEnabled && data.humidity > prefs.alertHumidityHigh) {
-                maybeAlert("hum_high", "High Humidity", "${PercentFormatter.format(data.humidity)} > ${PercentFormatter.format(prefs.alertHumidityHigh)}")
-            } else { clearAlert("hum_high") }
+            maybeAlert(
+                "hum_high", "High Humidity",
+                "${PercentFormatter.format(data.humidity)} > ${PercentFormatter.format(prefs.alertHumidityHigh)}",
+                prefs.alertHumidityHighEnabled && data.humidity > prefs.alertHumidityHigh
+            )
 
-            if (prefs.alertHumidityLowEnabled && data.humidity < prefs.alertHumidityLow) {
-                maybeAlert("hum_low", "Low Humidity", "${PercentFormatter.format(data.humidity)} < ${PercentFormatter.format(prefs.alertHumidityLow)}")
-            } else { clearAlert("hum_low") }
+            maybeAlert(
+                "hum_low", "Low Humidity",
+                "${PercentFormatter.format(data.humidity)} < ${PercentFormatter.format(prefs.alertHumidityLow)}",
+                prefs.alertHumidityLowEnabled && data.humidity < prefs.alertHumidityLow
+            )
 
             // Battery alerts
-            if (prefs.alertBatteryLowEnabled && data.battery < prefs.alertBatteryLow) {
-                maybeAlert("battery_low", "Low Battery", "Battery level is ${data.battery}% < ${prefs.alertBatteryLow}%")
-            } else { clearAlert("battery_low") }
+            maybeAlert(
+                "battery_low", "Low Battery",
+                "Battery level is ${data.battery}% < ${prefs.alertBatteryLow}%",
+                prefs.alertBatteryLowEnabled && data.battery < prefs.alertBatteryLow
+            )
         }
     }
 
