@@ -54,11 +54,27 @@ fun SensorChart(
                 !(it.temperature == 0f && it.humidity == 0f) &&
                 !(Math.abs(it.temperature - 21.12f) < 0.05f && Math.abs(it.humidity - 43f) < 1f)
             }
-            val sampledData = if (validData.size > 500) {
-                val rate = validData.size / 250
-                validData.filterIndexed { index, _ -> index % rate == 0 || index == validData.lastIndex }
+
+            val bucketDurationMs = 5 * 60 * 1000L // 5-minute consolidation
+            val bucketedData = validData
+                .groupBy { it.timestamp / bucketDurationMs }
+                .map { (bucketKey, list) ->
+                    SensorEntity(
+                        id = list.last().id,
+                        macAddress = list.last().macAddress,
+                        temperature = list.map { it.temperature }.average().toFloat(),
+                        humidity = list.map { it.humidity }.average().toFloat(),
+                        battery = list.last().battery,
+                        timestamp = bucketKey * bucketDurationMs
+                    )
+                }
+                .sortedBy { it.timestamp }
+
+            val sampledData = if (bucketedData.size > 500) {
+                val rate = bucketedData.size / 250
+                bucketedData.filterIndexed { index, _ -> index % rate == 0 || index == bucketedData.lastIndex }
             } else {
-                validData
+                bucketedData
             }
 
             val minTime = if (sampledData.isNotEmpty()) sampledData.first().timestamp else 0L
@@ -66,7 +82,8 @@ fun SensorChart(
             val duration = maxTime - minTime
 
             val timeFormatter = DateTimeFormatter.ofPattern("dd/MM HH:mm", Locale.getDefault()).withZone(ZoneId.systemDefault())
-            val gapThresholdMs = 45 * 60 * 1000L
+            val sampleRateMultiplier = if (bucketedData.size > 500) (bucketedData.size / 250) else 1
+            val gapThresholdMs = maxOf(45 * 60 * 1000L, sampleRateMultiplier * bucketDurationMs * 3)
 
             val lines = mutableListOf<Line>()
             var currentSegment = mutableListOf<PointValue>()
@@ -78,8 +95,8 @@ fun SensorChart(
                         val segmentLine = Line(ArrayList(currentSegment)).apply {
                             color = themeColor
                             isCubic = currentSegment.size > 2
-                            setHasPoints(sampledData.size <= 100 || currentSegment.size == 1)
-                            pointRadius = 4
+                            setHasPoints(currentSegment.size == 1)
+                            pointRadius = if (currentSegment.size == 1) 3 else 2
                             strokeWidth = if (sampledData.size > 200) 1 else 2
                             setHasLabels(false)
                             setHasLabelsOnlyForSelected(true)
@@ -109,8 +126,8 @@ fun SensorChart(
                 val segmentLine = Line(ArrayList(currentSegment)).apply {
                     color = themeColor
                     isCubic = currentSegment.size > 2
-                    setHasPoints(sampledData.size <= 100 || currentSegment.size == 1)
-                    pointRadius = 4
+                    setHasPoints(currentSegment.size == 1)
+                    pointRadius = if (currentSegment.size == 1) 3 else 2
                     strokeWidth = if (sampledData.size > 200) 1 else 2
                     setHasLabels(false)
                     setHasLabelsOnlyForSelected(true)

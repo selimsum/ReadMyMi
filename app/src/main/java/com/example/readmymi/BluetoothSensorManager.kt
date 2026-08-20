@@ -254,25 +254,27 @@ class BluetoothSensorManager(private val context: Context) {
         if (history.isEmpty()) return history
         val now = System.currentTimeMillis()
         val sorted = history.sortedBy { it.timestamp }
+        val validEpochRecords = sorted.filter { it.timestamp in 1577836800000L..now }
         val wrongRecords = sorted.filter { it.timestamp < 1577836800000L }
-        if (wrongRecords.isEmpty()) {
-            return sorted.filter { it.timestamp <= now }
+
+        // If the sensor has valid real-time epoch records (from after time was synced),
+        // keep ONLY the valid epoch records. Do not shift old pre-sync records onto today.
+        if (validEpochRecords.isNotEmpty()) {
+            return validEpochRecords
         }
+
+        if (wrongRecords.isEmpty()) return emptyList()
 
         val sensorEnd = wrongRecords.last().timestamp
         val sensorStart = wrongRecords.first().timestamp
         val sensorSpan = sensorEnd - sensorStart
 
-        // Place the history window ending shortly before now (e.g. now - 60s), but never
-        // before the last record we already have in the database, so corrected records
-        // fill the gap instead of overwriting previously stored history.
-        val windowEnd = maxOf(now - 60000L, lastDbTimestamp ?: 0L)
+        val windowEnd = now - 60000L
         val windowStart = windowEnd - sensorSpan
         val correction = windowStart - sensorStart
 
-        return sorted.map {
-            if (it.timestamp < 1577836800000L) it.copy(timestamp = it.timestamp + correction)
-            else it
+        return wrongRecords.map {
+            it.copy(timestamp = it.timestamp + correction)
         }.filter {
             it.timestamp <= now
         }
