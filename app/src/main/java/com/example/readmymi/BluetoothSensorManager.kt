@@ -130,16 +130,19 @@ class BluetoothSensorManager(private val context: Context) {
         
         var gatt: BluetoothGatt? = null
         val completion = kotlinx.coroutines.CompletableDeferred<Boolean>()
+        val lastPacketTime = java.util.concurrent.atomic.AtomicLong(0L)
+        val packetsReceived = java.util.concurrent.atomic.AtomicInteger(0)
         
         val gattCallback = object : BluetoothGattCallback() {
             private val writeStep = java.util.concurrent.atomic.AtomicInteger(0)
 
             override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
+                    g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
                     g.discoverServices()
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                     if (!completion.isCompleted) {
-                        completion.complete(false)
+                        completion.complete(historyList.isNotEmpty())
                     }
                 }
             }
@@ -192,7 +195,10 @@ class BluetoothSensorManager(private val context: Context) {
             }
 
             override fun onCharacteristicChanged(g: BluetoothGatt, char: BluetoothGattCharacteristic, value: ByteArray) {
-                if (value.size == 3 && value[0] == 0x35.toByte() && value[1] == 0.toByte() && value[2] == 0.toByte()) {
+                lastPacketTime.set(System.currentTimeMillis())
+                packetsReceived.incrementAndGet()
+
+                if (value.size >= 3 && value[0] == 0x35.toByte() && value[1] == 0.toByte() && value[2] == 0.toByte()) {
                     completion.complete(true)
                     g.disconnect()
                     return
@@ -233,18 +239,29 @@ class BluetoothSensorManager(private val context: Context) {
              }
         } else return@withContext emptyList()
         
-        val success = try {
-            kotlinx.coroutines.withTimeout(60000) { completion.await() }
-        } catch (e: TimeoutCancellationException) {
-            AppLogger.log("BluetoothSensorManager", "Download timeout: ${e.message}")
-            false
+        val maxWaitMs = if (records > 1000) 300_000L else 60_000L
+        val startTime = System.currentTimeMillis()
+
+        try {
+            while (!completion.isCompleted) {
+                kotlinx.coroutines.delay(500)
+                val now = System.currentTimeMillis()
+                if (now - startTime > maxWaitMs) {
+                    AppLogger.log("BluetoothSensorManager", "Download max timeout reached ($maxWaitMs ms)")
+                    break
+                }
+                if (packetsReceived.get() > 0 && (now - lastPacketTime.get()) > 8000L) {
+                    AppLogger.log("BluetoothSensorManager", "Stream idle for 8s, completing download with ${historyList.size} records")
+                    break
+                }
+            }
         } finally {
              gatt?.disconnect()
              gatt?.close()
         }
 
-        if (!success) {
-            throw Exception("Bluetooth connection lost or timed out during history download")
+        if (historyList.isEmpty() && !completion.isCompleted) {
+            throw Exception("Bluetooth connection lost or timed out before history data was received")
         }
         
         return@withContext fixTimestamps(historyList, lastDbTimestamp)
@@ -254,7 +271,9 @@ class BluetoothSensorManager(private val context: Context) {
         if (history.isEmpty()) return history
         val now = System.currentTimeMillis()
         val sorted = history.sortedBy { it.timestamp }
-        val validEpochRecords = sorted.filter { it.timestamp in 1577836800000L..now }
+        val validEpochRecords = sorted.filter { it.timestamp in 1577836800000L..(now + 300000L) }.map {
+            if (it.timestamp > now) it.copy(timestamp = now) else it
+        }
         val wrongRecords = sorted.filter { it.timestamp < 1577836800000L }
 
         // If the sensor has valid real-time epoch records (from after time was synced),
