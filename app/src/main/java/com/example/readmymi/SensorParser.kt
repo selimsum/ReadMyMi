@@ -2,6 +2,7 @@ package com.example.readmymi
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.ConcurrentHashMap
 
 object SensorParser {
 
@@ -10,6 +11,16 @@ object SensorParser {
     private const val MIN_HUM = 0.0
     private const val MAX_HUM = 100.0
     private const val ROUNDING_MULTIPLIER = 100.0
+
+    private val lastKnownReadings = ConcurrentHashMap<String, Pair<Double, Double>>()
+
+    fun setLastKnown(mac: String, temperature: Double, humidity: Double) {
+        lastKnownReadings[mac] = Pair(temperature, humidity)
+    }
+
+    fun clearCache() {
+        lastKnownReadings.clear()
+    }
     
     fun calculateBatteryPercentage(voltageMv: Int): Int {
         return when {
@@ -112,7 +123,23 @@ object SensorParser {
             AppLogger.log("Parser", "BTHome parsed $mac: voltage=$rawVoltageMv mV -> percentage=$voltageBattPct%, rawBattPct=$rawBattPct% -> final=$batt%")
         }
 
-        return if (temp != 0.0 || hum != 0.0) createSensorData(mac, name, temp, hum, batt) else null
+        if (temp != 0.0 || hum != 0.0) {
+            return createSensorData(mac, name, temp, hum, batt)
+        } else if (batt > 0 || rawVoltageMv != null) {
+            val cached = lastKnownReadings[mac]
+            if (cached != null) {
+                AppLogger.log("Parser", "BTHome using cached readings for $mac: temp=${cached.first}°C hum=${cached.second}% batt=$batt%")
+                return SensorData(
+                    macAddress = mac,
+                    deviceName = name,
+                    temperature = cached.first,
+                    humidity = cached.second,
+                    battery = batt,
+                    timestamp = System.currentTimeMillis()
+                )
+            }
+        }
+        return null
     }
 
     private fun parseATC(mac: String, name: String, data: ByteArray): SensorData? {
@@ -206,7 +233,7 @@ object SensorParser {
             return null
         }
         
-        return SensorData(
+        val sensorData = SensorData(
             macAddress = mac,
             deviceName = name,
             temperature = Math.round(temp * ROUNDING_MULTIPLIER) / ROUNDING_MULTIPLIER,
@@ -214,5 +241,7 @@ object SensorParser {
             battery = batt,
             timestamp = System.currentTimeMillis()
         )
+        lastKnownReadings[mac] = Pair(sensorData.temperature, sensorData.humidity)
+        return sensorData
     }
 }

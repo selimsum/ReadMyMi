@@ -1,7 +1,7 @@
 # Android/Java
 /build/
 /build_old/
-/.gradle/
+.gradle/
 /local.properties
 *.iml
 *.class
@@ -37,3 +37,8 @@ obj/
 Thumbs.db
 app/build/
 kotlinc/
+
+# Build artifacts and leftovers that must not be committed
+dist/
+*.orig
+patch.diff

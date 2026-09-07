@@ -34,7 +34,6 @@ class SensorForegroundService : Service() {
         private const val HISTORY_RECORD_INTERVAL_MS = 10 * 60 * 1000L
         private const val DEFAULT_HISTORY_RECORDS = 70
         private const val MAX_HISTORY_RECORDS = 512
-        private const val WAKE_LOCK_TIMEOUT_MS = 4 * 60 * 60 * 1000L
         @Volatile
         var isServiceRunning = false
         val isServiceRunningFlow = kotlinx.coroutines.flow.MutableStateFlow(false)
@@ -60,7 +59,8 @@ class SensorForegroundService : Service() {
 
     private val latestReadings = ConcurrentHashMap<String, SensorData>()
     private val historyCheckedMap = ConcurrentHashMap.newKeySet<String>()
-    private var lastWakeLockAcquire = 0L
+    private val historySyncInFlight = ConcurrentHashMap.newKeySet<String>()
+    private val lastHistoryAttemptMap = ConcurrentHashMap<String, Long>()
     
     // Flag to control service loop (Accessed via Companion for UI)
 
@@ -104,6 +104,12 @@ class SensorForegroundService : Service() {
                 } else {
                     updateNotification("Read My Mi Scanner", "Running...")
                 }
+            } else {
+                // Settings sends this intent even when the scanner is stopped.
+                // Letting the service start for it would leave a process with
+                // no scan loop and no foreground notification, so back out again.
+                stopSelf(startId)
+                return START_NOT_STICKY
             }
         }
         return START_STICKY
@@ -113,11 +119,9 @@ class SensorForegroundService : Service() {
         super.onCreate()
         AppLogger.log("Service", "Service Created")
 
-        // Acquire WakeLock for reliable background scanning
+        // Created here, held only while the radio is in use — see acquireWakeLock.
         val powerManager = getSystemService(PowerManager::class.java)
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ReadMyMi::ScanWakeLock")
-        wakeLock?.acquire(WAKE_LOCK_TIMEOUT_MS) // Safety timeout: 4 hours
-        lastWakeLockAcquire = System.currentTimeMillis()
 
         database = SensorDatabase.getDatabase(this)
         prefs = PrefsManager(this)
@@ -176,7 +180,6 @@ class SensorForegroundService : Service() {
 
     private suspend fun runServiceLoop() {
         while (isServiceRunning) {
-            ensureWakeLock()
             val scanStartTime = System.currentTimeMillis()
             performScan()
             
@@ -189,13 +192,25 @@ class SensorForegroundService : Service() {
         }
     }
 
-    // The initial acquire() carries a 4h safety timeout, so it can expire while the
-    // service is running for days. Re-acquire it at the start of every loop iteration.
-    private fun ensureWakeLock() {
-        val lock = wakeLock ?: return
-        if (!lock.isHeld && System.currentTimeMillis() - lastWakeLockAcquire >= WAKE_LOCK_TIMEOUT_MS) {
-            lock.acquire(WAKE_LOCK_TIMEOUT_MS)
-            lastWakeLockAcquire = System.currentTimeMillis()
+    // The BLE controller wakes the AP for scan results, so holding the lock while
+    // idle between scans would only keep the CPU from suspending. Acquire it just
+    // for the radio-active phases (scan window, history download); every acquire
+    // is paired with a release in a finally block. The lock is reference-counted
+    // (the PowerManager default), so an overlapping scan and download stay held
+    // until both finish.
+    private fun acquireWakeLock() {
+        try {
+            wakeLock?.acquire()
+        } catch (e: Exception) {
+            AppLogger.log("Service", "WakeLock acquire error: ${e.message}")
+        }
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            wakeLock?.takeIf { it.isHeld }?.release()
+        } catch (e: Exception) {
+            AppLogger.log("Service", "WakeLock release error: ${e.message}")
         }
     }
 
@@ -286,14 +301,21 @@ class SensorForegroundService : Service() {
     }
 
     private suspend fun performScan() {
+        if (historySyncInFlight.isNotEmpty()) {
+            AppLogger.log("Service", "Skipping scan: history sync in flight")
+            return
+        }
         AppLogger.log("Service", "Starting Periodic Scan (15s)")
         serviceStatus.value = "Scanning (15s)..."
         try {
+            acquireWakeLock()
             bluetoothSensorManager.startScanning(prefs.lastMac)
             kotlinx.coroutines.delay(15000)
             bluetoothSensorManager.stopScanning()
         } catch (e: Exception) {
             AppLogger.log("Service", "Scan error: ${e.message}")
+        } finally {
+            releaseWakeLock()
         }
         serviceStatus.value = "Processing & Sleeping..."
     }
@@ -371,7 +393,7 @@ class SensorForegroundService : Service() {
         latestReadings[data.macAddress] = data
         updateLastPublish(data.macAddress)
         
-        checkAndDownloadHistory(data.macAddress)
+        checkAndDownloadHistory(data.macAddress, data.timestamp)
         
         updateLiveNotification(data)
         throttleSaveToDb(data)
@@ -384,7 +406,7 @@ class SensorForegroundService : Service() {
         }
     }
 
-    private fun checkAndDownloadHistory(mac: String) {
+    private fun checkAndDownloadHistory(mac: String, incomingTimestamp: Long) {
         val mode = prefs.autoHistorySyncMode
         if (mode == "off") {
             return
@@ -400,7 +422,6 @@ class SensorForegroundService : Service() {
             if (historyCheckedMap.contains(mac)) {
                 return
             }
-            historyCheckedMap.add(mac)
         } else {
             val intervalMs = if (mode == "12h") 12 * 3600 * 1000L else 24 * 3600 * 1000L
             val lastSync = prefs.getLastHistorySyncTimestamp(mac)
@@ -409,20 +430,38 @@ class SensorForegroundService : Service() {
             }
         }
 
+        val lastAttempt = lastHistoryAttemptMap[mac] ?: 0L
+        if (now - lastAttempt < 60000L) {
+            return
+        }
+
+        // wasOffline stays true for every packet of a scan window until
+        // checkOfflineStatus() runs, so without this guard a device coming back
+        // online would launch one GATT download per received packet.
+        if (!historySyncInFlight.add(mac)) {
+            AppLogger.log("Service", "History sync already in progress for $mac; skipping.")
+            return
+        }
+
         serviceScope.launch(Dispatchers.IO) {
             try {
-                val latestDbTimestamp = database.sensorDao().getLatestTimestamp(mac)
+                acquireWakeLock()
+                lastHistoryAttemptMap[mac] = now
+                bluetoothSensorManager.stopScanning()
+
+                val previousDbTimestamp = database.sensorDao().getLatestTimestampBefore(mac, incomingTimestamp - 60000L)
+                val latestDbTimestamp = previousDbTimestamp ?: database.sensorDao().getLatestTimestamp(mac)
                 val missingSince = latestDbTimestamp ?: 0L
-                val missingDuration = now - missingSince
+                val missingDuration = incomingTimestamp - missingSince
 
                 if (latestDbTimestamp == null || missingDuration > HISTORY_GAP_THRESHOLD_MS) {
                     val recordsToDownload = estimateHistoryRecordCount(missingDuration, latestDbTimestamp == null)
-                    AppLogger.log("Service", "Syncing history ($mode). Downloading up to $recordsToDownload records, missingSince=$missingSince...")
+                    AppLogger.log("Service", "Syncing history ($mode). Downloading up to $recordsToDownload records, missingSince=$missingSince (gap ${missingDuration / 60000}m)...")
                     val history = bluetoothSensorManager.downloadHistory(mac, records = recordsToDownload, lastDbTimestamp = latestDbTimestamp) { AppLogger.log("BLE", it) }
 
                     val missingHistory = history
                         .asSequence()
-                        .filter { it.timestamp <= now }
+                        .filter { it.timestamp <= incomingTimestamp }
                         .distinctBy { it.timestamp }
                         .toList()
                         .sortedBy { it.timestamp }
@@ -432,13 +471,22 @@ class SensorForegroundService : Service() {
                         // Update sync timestamp to the latest record we saved, not "now"
                         val latestSavedTimestamp = missingHistory.maxOf { it.timestamp }
                         prefs.setLastHistorySyncTimestamp(mac, latestSavedTimestamp)
+                        historyCheckedMap.add(mac)
+                        AppLogger.log("Service", "History sync complete: saved ${missingHistory.size} records.")
                     } else {
                         AppLogger.log("Service", "No missing history records found on device.")
-                        prefs.setLastHistorySyncTimestamp(mac, now)
+                        prefs.setLastHistorySyncTimestamp(mac, incomingTimestamp)
+                        historyCheckedMap.add(mac)
                     }
+                } else {
+                    historyCheckedMap.add(mac)
                 }
             } catch (e: Exception) {
                 AppLogger.log("Service", "History sync failed: ${e.message}")
+                historyCheckedMap.remove(mac)
+            } finally {
+                historySyncInFlight.remove(mac)
+                releaseWakeLock()
             }
         }
     }
@@ -509,7 +557,7 @@ class SensorForegroundService : Service() {
 
     private fun startForegroundCompat(notification: Notification) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
@@ -559,7 +607,7 @@ class SensorForegroundService : Service() {
         isServiceRunningFlow.value = false
         val manager = getSystemService(NotificationManager::class.java)
         manager.cancel(NOTIFICATION_ID)
-        wakeLock?.release()
+        wakeLock?.takeIf { it.isHeld }?.release()
         serviceScope.cancel()
     }
 }

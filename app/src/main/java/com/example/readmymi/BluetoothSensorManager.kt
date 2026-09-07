@@ -98,6 +98,8 @@ class BluetoothSensorManager(private val context: Context) {
             filters.addAll(uuidFilters)
         }
 
+        // LOW_LATENCY ensures 100% duty cycle during the brief 15s scan window
+        // so that alternating advertising packets are not missed.
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()

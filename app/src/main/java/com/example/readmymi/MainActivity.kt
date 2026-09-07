@@ -88,12 +88,10 @@ fun MainScreen(viewModel: MainViewModel) {
     var showAbout by remember { mutableStateOf(false) }
     var isDownloading by remember { mutableStateOf(false) }
 
+    // BLUETOOTH_SCAN is declared neverForLocation in the manifest, so no location
+    // permission is needed on Android 12+ (the app's minimum).
     val permissions = remember {
-        mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION).apply {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                add(Manifest.permission.BLUETOOTH_SCAN)
-                add(Manifest.permission.BLUETOOTH_CONNECT)
-            }
+        mutableListOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT).apply {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 add(Manifest.permission.POST_NOTIFICATIONS)
             }
@@ -106,7 +104,7 @@ fun MainScreen(viewModel: MainViewModel) {
         if (essentialGranted) {
             viewModel.startService()
         } else {
-            Toast.makeText(context, "Essential Bluetooth and Location permissions are required to scan.", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "Essential Bluetooth permissions are required to scan.", Toast.LENGTH_LONG).show()
         }
     }
 

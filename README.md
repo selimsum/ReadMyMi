@@ -21,7 +21,7 @@ It runs passively as a foreground service to provide real-time updates and histo
   - **BTHome** (v1/v2 - unencrypted temperature, humidity, voltage, and battery percentages)
   - **ATC** (Custom custom firmware formats for Mijia LYWSD03MMC sensors, e.g., puzankov/atc1441)
   - **Xiaomi Mijia** (Standard advertising payloads for temperature/humidity/battery)
-- 📊 **Rich Dashboard:** High-fidelity interactive charts (via HelloCharts) to visualize temperature and humidity trends.
+- 📊 **Rich Dashboard:** Historical temperature and humidity trend charts (via HelloCharts).
 - 💾 **Local History:** Fully local database storage powered by **Room DB** so your environmental history never leaves your device.
 - ⏳ **Direct History Downloading:** Remotely fetch stored logs directly from compatible custom BLE sensors.
 - ⚙️ **Customizable Settings:** Define time filters, temperature units (Celsius/Fahrenheit), view sensor connection states, and clear caches.
@@ -43,15 +43,14 @@ It runs passively as a foreground service to provide real-time updates and histo
 
 ### Prerequisites
 
-- Android Studio Koala / Ladybug or newer
-- Android SDK 34+
-- A physical Android device with Bluetooth Low Energy (BLE) support (recommended for scanning tests)
+- Android Studio with Android SDK 36 installed
+- A physical Android device running Android 12 (API 31) or newer, with Bluetooth Low Energy (BLE) support
 
 ### Compilation & Installation
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/ReadMyMi.git
+   git clone https://github.com/selimsum/ReadMyMi.git
    cd ReadMyMi
    ```
 
@@ -101,7 +100,19 @@ The project includes unit tests for data parsers, preference managers, and utili
 ./gradlew test
 ```
 
-For performance benchmarks, you can check `Benchmark.kt` which evaluates optimizations for data formatting and date manipulations.
+CI runs the unit tests and a debug build on every push and pull request.
+
+---
+
+## 🔐 Permissions & Privacy
+
+ReadMyMi requests only what BLE scanning actually needs:
+
+- `BLUETOOTH_SCAN` (declared `neverForLocation`) and `BLUETOOTH_CONNECT` — discover and read sensor advertisements. No location permission is requested or required.
+- `POST_NOTIFICATIONS` — ongoing scanner status and threshold alerts.
+- `FOREGROUND_SERVICE` with the `connectedDevice` type — keeps the scanner running in the background.
+
+There is **no `INTERNET` permission**: readings are stored locally in Room and never leave your device.
 
 ---
 

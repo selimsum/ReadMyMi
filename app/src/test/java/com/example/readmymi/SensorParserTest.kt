@@ -1,10 +1,17 @@
 package com.example.readmymi
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Before
 import org.junit.Test
 
 class SensorParserTest {
+
+    @Before
+    fun setUp() {
+        SensorParser.clearCache()
+    }
 
     @Test
     fun testCalculateBatteryPercentage() {
@@ -302,6 +309,37 @@ class SensorParserTest {
         val result = SensorParser.parse("ATC_BE9C3E", "A4:C1:38:BE:9C:3E", serviceData)
 
         assertNull(result)
+    }
+
+    @Test
+    fun testParseBTHome_PvvxData2Variant_WithCachedTempHum() {
+        // First parse data1 variant to establish cached temp & humidity
+        val payload1 = byteArrayOf(
+            0x40.toByte(),
+            0x00.toByte(), 0x7B.toByte(),
+            0x01.toByte(), 80.toByte(),
+            0x02.toByte(), 0x2E.toByte(), 0x09.toByte(),
+            0x03.toByte(), 0x7C.toByte(), 0x15.toByte()
+        )
+        val result1 = SensorParser.parse("ATC_BE9C3E", "A4:C1:38:BE:9C:3E", mapOf("fcd2" to payload1))
+        assertNotNull(result1)
+        assertEquals(23.5, result1?.temperature)
+        assertEquals(55.0, result1?.humidity)
+        assertEquals(80, result1?.battery)
+
+        // Now parse data2 variant (voltage only 2893mV -> 77% battery)
+        val payload2 = byteArrayOf(
+            0x40.toByte(),
+            0x00.toByte(), 0x7C.toByte(),
+            0x0C.toByte(), 0x4D.toByte(), 0x0B.toByte(),
+            0x10.toByte(), 0x00.toByte(),
+            0x11.toByte(), 0x01.toByte()
+        )
+        val result2 = SensorParser.parse("ATC_BE9C3E", "A4:C1:38:BE:9C:3E", mapOf("fcd2" to payload2))
+        assertNotNull(result2)
+        assertEquals(23.5, result2?.temperature)
+        assertEquals(55.0, result2?.humidity)
+        assertEquals(77, result2?.battery)
     }
 
     @Test
