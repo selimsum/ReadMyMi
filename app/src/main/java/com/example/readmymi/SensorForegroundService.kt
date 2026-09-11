@@ -30,15 +30,48 @@ class SensorForegroundService : Service() {
         private const val CHANNEL_ID = "ReadMyMiServiceChannel"
         private const val CHANNEL_SILENT_ID = "ReadMyMiServiceChannelSilent"
         private const val ALERTS_CHANNEL_ID = "ReadMyMiAlertChannel"
-        private const val HISTORY_GAP_THRESHOLD_MS = 30 * 60 * 1000L
-        private const val HISTORY_RECORD_INTERVAL_MS = 10 * 60 * 1000L
-        private const val DEFAULT_HISTORY_RECORDS = 70
-        private const val MAX_HISTORY_RECORDS = 512
+        const val HISTORY_GAP_THRESHOLD_MS = 30 * 60 * 1000L
+        const val HISTORY_RECORD_INTERVAL_MS = 10 * 60 * 1000L
+        const val DEFAULT_HISTORY_RECORDS = 70
+        const val MAX_HISTORY_RECORDS = 10000
         @Volatile
         var isServiceRunning = false
         val isServiceRunningFlow = kotlinx.coroutines.flow.MutableStateFlow(false)
         val liveSensorData = kotlinx.coroutines.flow.MutableStateFlow<SensorData?>(null)
         val serviceStatus = kotlinx.coroutines.flow.MutableStateFlow("Initializing...")
+
+        fun findGapInTimestamps(recentTimestamps: List<Long>, incomingTimestamp: Long): Pair<Long, Long>? {
+            if (recentTimestamps.isEmpty()) {
+                return Pair(0L, 24 * 3600 * 1000L) // Initial sync: 24h
+            }
+
+            // 1. Check if there is a gap between the latest DB record and incoming reading
+            val latestDb = recentTimestamps.first()
+            val latestGap = incomingTimestamp - latestDb
+            if (latestGap > HISTORY_GAP_THRESHOLD_MS) {
+                return Pair(latestDb, latestGap)
+            }
+
+            // 2. Check for gaps between adjacent historical records in recent history
+            // (e.g., live records were recently inserted after an offline period)
+            for (i in 0 until recentTimestamps.size - 1) {
+                val newer = recentTimestamps[i]
+                val older = recentTimestamps[i + 1]
+                val gap = newer - older
+                if (gap > HISTORY_GAP_THRESHOLD_MS) {
+                    return Pair(older, incomingTimestamp - older)
+                }
+            }
+
+            return null
+        }
+
+        fun estimateHistoryRecordCount(missingDuration: Long, isInitialSync: Boolean): Int {
+            if (isInitialSync) return DEFAULT_HISTORY_RECORDS
+            // Estimate records with 5-minute sampling resolution to ensure no records are missed
+            val estimatedRecords = (missingDuration / (5 * 60 * 1000L)).toInt() + 20
+            return estimatedRecords.coerceIn(DEFAULT_HISTORY_RECORDS, MAX_HISTORY_RECORDS)
+        }
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -183,6 +216,11 @@ class SensorForegroundService : Service() {
             val scanStartTime = System.currentTimeMillis()
             performScan()
             
+            // Wait for any in-flight history sync to complete before proceeding
+            while (historySyncInFlight.isNotEmpty() && isServiceRunning) {
+                kotlinx.coroutines.delay(1000)
+            }
+
             checkOfflineStatus(scanStartTime)
             if (prefs.alertsEnabled) checkAlerts(prefs)
             checkTimeSync()
@@ -301,8 +339,8 @@ class SensorForegroundService : Service() {
     }
 
     private suspend fun performScan() {
-        if (historySyncInFlight.isNotEmpty()) {
-            AppLogger.log("Service", "Skipping scan: history sync in flight")
+        if (historySyncInFlight.isNotEmpty() || BluetoothSensorManager.isGattBusy) {
+            AppLogger.log("Service", "Skipping scan: history sync or GATT in flight")
             return
         }
         AppLogger.log("Service", "Starting Periodic Scan (15s)")
@@ -337,7 +375,6 @@ class SensorForegroundService : Service() {
                     AppLogger.log("Service", "Device $targetMac went offline (no data for ${prefs.effectiveOfflineTimeoutMinutes} mins).")
                 }
                 !isCurrentlyOffline && wasOffline -> {
-                    prefs.setWasOffline(targetMac, false)
                     AppLogger.log("Service", "Device $targetMac came back online.")
                     historyCheckedMap.remove(targetMac)
                 }
@@ -346,14 +383,18 @@ class SensorForegroundService : Service() {
     }
 
     private suspend fun checkTimeSync() {
+        if (historySyncInFlight.isNotEmpty() || BluetoothSensorManager.isGattBusy) {
+            AppLogger.log("Service", "Skipping time sync check: GATT busy or history sync in flight")
+            return
+        }
         val now = System.currentTimeMillis()
         val lastCheck = lastDbSaveMap["TIME_SYNC_CHECK"] ?: 0L
         if (now - lastCheck > 3600000L) {
-            lastDbSaveMap["TIME_SYNC_CHECK"] = now
             val targetMac = prefs.lastMac
             if (targetMac.isNotEmpty()) {
                 val lastSync = prefs.getLastTimeSync(targetMac)
                 if (now - lastSync > 86400000L) { // Daily sync (24 hours)
+                    lastDbSaveMap["TIME_SYNC_CHECK"] = now
                     performTimeSync(targetMac, now)
                 }
             }
@@ -449,15 +490,14 @@ class SensorForegroundService : Service() {
                 lastHistoryAttemptMap[mac] = now
                 bluetoothSensorManager.stopScanning()
 
-                val previousDbTimestamp = database.sensorDao().getLatestTimestampBefore(mac, incomingTimestamp - 60000L)
-                val latestDbTimestamp = previousDbTimestamp ?: database.sensorDao().getLatestTimestamp(mac)
-                val missingSince = latestDbTimestamp ?: 0L
-                val missingDuration = incomingTimestamp - missingSince
+                val recentTimestamps = database.sensorDao().getRecentTimestamps(mac, limit = 100)
+                val gapInfo = findGapInTimestamps(recentTimestamps, incomingTimestamp)
 
-                if (latestDbTimestamp == null || missingDuration > HISTORY_GAP_THRESHOLD_MS) {
-                    val recordsToDownload = estimateHistoryRecordCount(missingDuration, latestDbTimestamp == null)
-                    AppLogger.log("Service", "Syncing history ($mode). Downloading up to $recordsToDownload records, missingSince=$missingSince (gap ${missingDuration / 60000}m)...")
-                    val history = bluetoothSensorManager.downloadHistory(mac, records = recordsToDownload, lastDbTimestamp = latestDbTimestamp) { AppLogger.log("BLE", it) }
+                if (gapInfo != null) {
+                    val (missingSince, gapDuration) = gapInfo
+                    val recordsToDownload = estimateHistoryRecordCount(gapDuration, recentTimestamps.isEmpty())
+                    AppLogger.log("Service", "Syncing history ($mode). Downloading up to $recordsToDownload records, missingSince=$missingSince (gap ${gapDuration / 60000}m)...")
+                    val history = bluetoothSensorManager.downloadHistory(mac, records = recordsToDownload, lastDbTimestamp = missingSince) { AppLogger.log("BLE", it) }
 
                     val missingHistory = history
                         .asSequence()
@@ -468,17 +508,20 @@ class SensorForegroundService : Service() {
 
                     if (missingHistory.isNotEmpty()) {
                         saveHistoryToDb(missingHistory)
-                        // Update sync timestamp to the latest record we saved, not "now"
                         val latestSavedTimestamp = missingHistory.maxOf { it.timestamp }
                         prefs.setLastHistorySyncTimestamp(mac, latestSavedTimestamp)
+                        prefs.setLastTimeSync(mac, now)
+                        prefs.setWasOffline(mac, false)
                         historyCheckedMap.add(mac)
                         AppLogger.log("Service", "History sync complete: saved ${missingHistory.size} records.")
                     } else {
                         AppLogger.log("Service", "No missing history records found on device.")
                         prefs.setLastHistorySyncTimestamp(mac, incomingTimestamp)
+                        prefs.setWasOffline(mac, false)
                         historyCheckedMap.add(mac)
                     }
                 } else {
+                    prefs.setWasOffline(mac, false)
                     historyCheckedMap.add(mac)
                 }
             } catch (e: Exception) {
@@ -489,14 +532,6 @@ class SensorForegroundService : Service() {
                 releaseWakeLock()
             }
         }
-    }
-
-    private fun estimateHistoryRecordCount(missingDuration: Long, isInitialSync: Boolean): Int {
-        if (isInitialSync) return DEFAULT_HISTORY_RECORDS
-        // Add significant buffer to ensure we fetch enough records to cover the gap,
-        // especially after a long disconnection where device may have stored more than expected.
-        val estimatedRecords = (missingDuration / HISTORY_RECORD_INTERVAL_MS).toInt() + 10
-        return estimatedRecords.coerceIn(1, MAX_HISTORY_RECORDS)
     }
 
     private suspend fun saveHistoryToDb(history: List<SensorData>) {

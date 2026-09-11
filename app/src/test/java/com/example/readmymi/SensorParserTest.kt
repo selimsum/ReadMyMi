@@ -414,4 +414,74 @@ class SensorParserTest {
         // Internal exception catching should handle IndexOutOfBounds and return null
         assertNull(result)
     }
+
+    @Test
+    fun testFindGapInTimestamps_EmptyDb() {
+        val gap = SensorForegroundService.findGapInTimestamps(emptyList(), 1000000L)
+        assertNotNull(gap)
+        assertEquals(0L, gap?.first)
+        assertEquals(24 * 3600 * 1000L, gap?.second)
+    }
+
+    @Test
+    fun testFindGapInTimestamps_ContinuousData() {
+        val now = 1789131362436L
+        val timestamps = listOf(
+            now - 10 * 60 * 1000L, // 10 min ago
+            now - 20 * 60 * 1000L, // 20 min ago
+            now - 30 * 60 * 1000L  // 30 min ago
+        )
+        val gap = SensorForegroundService.findGapInTimestamps(timestamps, now)
+        assertNull("Continuous 10-min data should not trigger a gap", gap)
+    }
+
+    @Test
+    fun testFindGapInTimestamps_DirectGapBeforeIncoming() {
+        val now = 1789131362436L
+        val threeDaysAgo = now - 3 * 24 * 3600 * 1000L
+        val timestamps = listOf(threeDaysAgo)
+
+        val gap = SensorForegroundService.findGapInTimestamps(timestamps, now)
+        assertNotNull(gap)
+        assertEquals(threeDaysAgo, gap?.first)
+        assertEquals(now - threeDaysAgo, gap?.second)
+    }
+
+    @Test
+    fun testFindGapInTimestamps_GapBeforeRecentlyInsertedLiveReadings() {
+        // Simulates the exact user bug:
+        // Device was offline for 3 days, then 2 live readings were inserted (10 min apart)
+        // after reconnection when history sync previously failed.
+        val now = 1789131362436L
+        val liveReading1 = now
+        val liveReading2 = now - 10 * 60 * 1000L // 10 min ago
+        val beforeDisconnection = now - 3 * 24 * 3600 * 1000L // 3 days ago
+
+        val timestamps = listOf(liveReading1, liveReading2, beforeDisconnection)
+
+        val gap = SensorForegroundService.findGapInTimestamps(timestamps, now)
+        assertNotNull("Should detect the 3-day gap preceding the recent live readings", gap)
+        assertEquals(beforeDisconnection, gap?.first)
+        assertEquals(now - beforeDisconnection, gap?.second)
+    }
+
+    @Test
+    fun testEstimateHistoryRecordCount_Scaling() {
+        // Initial sync
+        assertEquals(SensorForegroundService.DEFAULT_HISTORY_RECORDS, SensorForegroundService.estimateHistoryRecordCount(0, true))
+
+        // Small gap (30 mins) -> returns at least DEFAULT_HISTORY_RECORDS
+        assertEquals(70, SensorForegroundService.estimateHistoryRecordCount(30 * 60 * 1000L, false))
+
+        // 3 days gap (4320 mins) -> (4320 / 5) + 20 = 884 records, exceeding old 512 limit
+        val threeDaysMs = 3 * 24 * 3600 * 1000L
+        val recordsThreeDays = SensorForegroundService.estimateHistoryRecordCount(threeDaysMs, false)
+        assertEquals(884, recordsThreeDays)
+
+        // Huge gap (60 days) -> capped at MAX_HISTORY_RECORDS (10000)
+        val sixtyDaysMs = 60L * 24 * 3600 * 1000L
+        val recordsSixtyDays = SensorForegroundService.estimateHistoryRecordCount(sixtyDaysMs, false)
+        assertEquals(SensorForegroundService.MAX_HISTORY_RECORDS, recordsSixtyDays)
+    }
 }
+

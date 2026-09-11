@@ -31,6 +31,9 @@ interface SensorDao {
     @Query("SELECT timestamp FROM sensor_data WHERE macAddress = :macAddress AND timestamp < :beforeTimestamp ORDER BY timestamp DESC LIMIT 1")
     suspend fun getLatestTimestampBefore(macAddress: String, beforeTimestamp: Long): Long?
 
+    @Query("SELECT timestamp FROM sensor_data WHERE macAddress = :macAddress ORDER BY timestamp DESC LIMIT :limit")
+    suspend fun getRecentTimestamps(macAddress: String, limit: Int = 100): List<Long>
+
     @Query("SELECT DISTINCT macAddress FROM sensor_data")
     fun getKnownDevices(): Flow<List<String>>
 
