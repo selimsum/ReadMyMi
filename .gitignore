@@ -42,3 +42,4 @@ kotlinc/
 dist/
 *.orig
 patch.diff
+.kotlin/
