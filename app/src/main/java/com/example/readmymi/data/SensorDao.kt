@@ -37,8 +37,8 @@ interface SensorDao {
     @Query("SELECT DISTINCT macAddress FROM sensor_data")
     fun getKnownDevices(): Flow<List<String>>
 
-    @Query("DELETE FROM sensor_data WHERE (ABS(temperature - 21.12) < 0.05 AND ABS(humidity - 43) < 1) OR (temperature <= -40 OR temperature >= 80 OR (temperature = 0 AND humidity = 0))")
-    suspend fun deleteDummyRecords()
+    @Query("DELETE FROM sensor_data WHERE temperature <= -40 OR temperature >= 80 OR (temperature = 0 AND humidity = 0)")
+    suspend fun deleteImplausibleRecords()
 
     @Query("DELETE FROM sensor_data")
     suspend fun deleteAll()

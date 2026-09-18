@@ -3,7 +3,6 @@ package com.example.readmymi
 import android.Manifest
 import android.os.Build
 import android.os.Bundle
-import androidx.lifecycle.lifecycleScope
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -44,20 +43,19 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 
 
-import kotlinx.coroutines.launch
 import com.example.readmymi.ui.theme.ReadMyMiTheme
 import com.example.readmymi.data.SensorDatabase
+import com.example.readmymi.data.SensorEntity
 import androidx.activity.viewModels
-import androidx.core.content.ContextCompat
 import android.content.pm.PackageManager
 import android.bluetooth.BluetoothAdapter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
+import androidx.core.content.ContextCompat
 import com.example.readmymi.ui.AboutScreen
 import com.example.readmymi.ui.SettingsScreen
 import com.example.readmymi.ui.DashboardScreen
-import com.example.readmymi.data.SensorEntity
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -78,7 +76,6 @@ fun MainScreen(viewModel: MainViewModel) {
     val context = LocalContext.current
     val prefs = remember { PrefsManager(context) }
     val database = remember { SensorDatabase.getDatabase(context) }
-    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
     val lastMac by viewModel.lastMac.collectAsState()
     val isRunning by viewModel.isServiceRunning.collectAsState()
@@ -109,8 +106,11 @@ fun MainScreen(viewModel: MainViewModel) {
     }
 
     LaunchedEffect(Unit) {
+        // Legacy one-time cleanup for DBs written before parse-time placeholder
+        // rejection (see SensorParser.createSensorData). Bounded to implausible
+        // values only — never deletes plausible room readings like 21.1C/43%.
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            database.sensorDao().deleteDummyRecords()
+            database.sensorDao().deleteImplausibleRecords()
         }
         val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
         if (bluetoothAdapter == null) {
@@ -212,7 +212,7 @@ fun MainScreen(viewModel: MainViewModel) {
                     onStopService = { viewModel.stopService() },
                     onShowAbout = { showAbout = true },
                     onClearLastMac = {
-                        viewModel.updateLastMac("")
+                        viewModel.clearSelection()
                         viewModel.restartService()
                     },
                     onBack = { showSettings = false }
@@ -226,35 +226,14 @@ fun MainScreen(viewModel: MainViewModel) {
                     isDownloading = isDownloading,
                     onRefresh = { viewModel.restartService() },
                     onDownloadHistory = { records: Int ->
+                        // Rotation-safe: the work runs in the ViewModel scope.
                         isDownloading = true
-                        lifecycleOwner.lifecycleScope.launch {
-                            try {
-                                val mac = sensorData?.macAddress ?: ""
-                                val manager = BluetoothSensorManager(context)
-                                val latestTs = database.sensorDao().getLatestTimestamp(mac)
-                                val history = manager.downloadHistory(mac, records, lastDbTimestamp = latestTs)
-                                if (history.isNotEmpty()) {
-                                    database.sensorDao().insertAll(history.map { 
-                                        SensorEntity(
-                                            id = 0,
-                                            macAddress = it.macAddress,
-                                            temperature = it.temperature.toFloat(),
-                                            humidity = it.humidity.toFloat(),
-                                            battery = it.battery,
-                                            timestamp = it.timestamp
-                                        )
-                                    })
-                                    database.sensorDao().deleteDummyRecords()
-                                    Toast.makeText(context, "Successfully downloaded ${history.size} records.", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    database.sensorDao().deleteDummyRecords()
-                                    Toast.makeText(context, "No new history records found.", Toast.LENGTH_SHORT).show()
-                                }
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "History sync failed: ${e.message}", Toast.LENGTH_LONG).show()
-                            } finally {
-                                isDownloading = false
-                            }
+                        viewModel.downloadHistory(records) { ok, message ->
+                            Toast.makeText(
+                                context, message,
+                                if (ok) Toast.LENGTH_SHORT else Toast.LENGTH_LONG
+                            ).show()
+                            isDownloading = false
                         }
                     }
                 )

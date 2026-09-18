@@ -14,6 +14,22 @@ class SensorParserTest {
     }
 
     @Test
+    fun testPlaceholderFrameRejectedAtParseTime() {
+        // Known ATC placeholder: 21.12C / 43% must never become a SensorData,
+        // so plausible real readings can no longer be swept by a DAO delete.
+        val payload = byteArrayOf(
+            0x40.toByte(),
+            0x02.toByte(), 0x40.toByte(), 0x08.toByte(), // 2112 -> 21.12C
+            0x03.toByte(), 0xCC.toByte(), 0x10.toByte()  // 4300 -> 43.0%
+        )
+        val parsed = SensorParser.parse(
+            "ATC_Test", "AA:BB:CC:DD:EE:FF",
+            mapOf("0000fcd2-0000-1000-8000-00805f9b34fb" to payload)
+        )
+        assertNull(parsed)
+    }
+
+    @Test
     fun testCalculateBatteryPercentage() {
         // >= 3000mV
         assertEquals(100, SensorParser.calculateBatteryPercentage(3100))

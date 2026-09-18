@@ -6,6 +6,8 @@ import android.content.SharedPreferences
 import com.example.readmymi.data.SensorDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.test.resetMain
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -18,6 +20,18 @@ import org.mockito.kotlin.whenever
 import org.junit.Assert.assertEquals
 
 class MainViewModelTest {
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(Dispatchers.Unconfined)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
 
     @Test
     fun testUpdateLastMac() {

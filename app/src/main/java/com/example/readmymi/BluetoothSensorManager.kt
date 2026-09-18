@@ -10,8 +10,11 @@ import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.os.ParcelUuid
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.UUID
 import android.bluetooth.le.ScanFilter
@@ -51,6 +54,8 @@ class BluetoothSensorManager(private val context: Context) {
                 )
             }
         }
+        /** Caller-visible ceiling for a full GATT history download (cancellable). */
+        const val DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000L
     }
 
     private val bluetoothManager: BluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -58,8 +63,8 @@ class BluetoothSensorManager(private val context: Context) {
     private val scanner: BluetoothLeScanner?
         get() = bluetoothAdapter?.bluetoothLeScanner
 
-    private val _sensorDataFlow = MutableStateFlow<SensorData?>(null)
-    val sensorDataFlow: StateFlow<SensorData?> = _sensorDataFlow.asStateFlow()
+    private val _sensorDataFlow = MutableSharedFlow<SensorData>(extraBufferCapacity = 64)
+    val sensorDataFlow: SharedFlow<SensorData> = _sensorDataFlow.asSharedFlow()
 
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
@@ -77,7 +82,8 @@ class BluetoothSensorManager(private val context: Context) {
             val data = SensorParser.parse(device.name ?: "", device.address, serviceData)
             
             if (data != null) {
-                _sensorDataFlow.value = data
+                // Buffer (drop oldest) instead of conflating: every parsed packet is delivered.
+                _sensorDataFlow.tryEmit(data)
                 AppLogger.log("BluetoothSensorManager", "Parsed: $data")
             }
         }
@@ -94,14 +100,19 @@ class BluetoothSensorManager(private val context: Context) {
             AppLogger.log("BLE", "Scanner not available")
             return
         }
-        
+
         if (_isScanning.value) return
 
+        // Always keep UUID filters so other/unknown sensors remain visible.
+        // An optional device-address filter narrows the hardware scan when a known
+        // MAC is selected; filtering for the selected device still happens in
+        // onScanResult-equivalent paths via handleSensorData.
         val filters = mutableListOf<ScanFilter>()
-        if (!targetMac.isNullOrEmpty() && try { BluetoothAdapter.checkBluetoothAddress(targetMac) } catch (e: IllegalArgumentException) { false }) {
-            filters.add(ScanFilter.Builder().setDeviceAddress(targetMac).build())
-        } else {
-            filters.addAll(uuidFilters)
+        val hasTargetMac = !targetMac.isNullOrEmpty() &&
+            try { BluetoothAdapter.checkBluetoothAddress(targetMac) } catch (e: IllegalArgumentException) { false }
+        filters.addAll(uuidFilters)
+        if (hasTargetMac) {
+            filters.add(ScanFilter.Builder().setDeviceAddress(requireNotNull(targetMac)).build())
         }
 
         // LOW_LATENCY ensures 100% duty cycle during the brief 15s scan window
@@ -132,7 +143,13 @@ class BluetoothSensorManager(private val context: Context) {
 
 
     @SuppressLint("MissingPermission")
-    suspend fun downloadHistory(deviceAddress: String, records: Int = 70, lastDbTimestamp: Long? = null, onLog: (String) -> Unit = {}): List<SensorData> = kotlinx.coroutines.withContext(Dispatchers.IO) {
+    suspend fun downloadHistory(deviceAddress: String, records: Int = 70, lastDbTimestamp: Long? = null, onLog: (String) -> Unit = {}): List<SensorData> =
+        kotlinx.coroutines.withTimeout(DOWNLOAD_TIMEOUT_MS) {
+            downloadHistoryInternal(deviceAddress, records, lastDbTimestamp, onLog)
+        }
+
+    @SuppressLint("MissingPermission")
+    private suspend fun downloadHistoryInternal(deviceAddress: String, records: Int = 70, lastDbTimestamp: Long? = null, onLog: (String) -> Unit = {}): List<SensorData> = kotlinx.coroutines.withContext(Dispatchers.IO) {
         gattMutex.withLock {
             isGattBusy = true
             try {

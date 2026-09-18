@@ -232,6 +232,13 @@ object SensorParser {
             AppLogger.log("Parser", "REJECTED $name ($mac): both temp and hum are zero")
             return null
         }
+        // Reject the known ATC placeholder frame at parse time so it never
+        // reaches the DB (tighter tolerance than the legacy DAO sweep; the
+        // chart layer keeps a defensive filter as well).
+        if (Math.abs(temp - 21.12) < 0.005 && Math.abs(hum - 43.0) < 0.5) {
+            AppLogger.log("Parser", "REJECTED $name ($mac): known ATC placeholder frame (21.12/43)")
+            return null
+        }
         
         val sensorData = SensorData(
             macAddress = mac,

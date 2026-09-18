@@ -26,7 +26,8 @@ fun SensorChart(
     data: List<SensorEntity>,
     isTemperature: Boolean, // true for Temp, false for Humidity
     modifier: Modifier = Modifier,
-    tempUnit: String = "C"
+    tempUnit: String = "C",
+    timeFilter: Int = 0
 ) {
     if (data.isEmpty()) return
 
@@ -55,7 +56,7 @@ fun SensorChart(
                 !(Math.abs(it.temperature - 21.12f) < 0.05f && Math.abs(it.humidity - 43f) < 1f)
             }
 
-            val bucketDurationMs = 5 * 60 * 1000L // 5-minute consolidation
+            val bucketDurationMs = getTimeBucketSize(timeFilter) // Day=10m, Week=1h, Month=4h, 6Mo=24h
             val bucketedData = validData
                 .groupBy { it.timestamp / bucketDurationMs }
                 .map { (bucketKey, list) ->

@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [SensorEntity::class], version = 3, exportSchema = false)
+@Database(entities = [SensorEntity::class], version = 3, exportSchema = true)
 abstract class SensorDatabase : RoomDatabase() {
     abstract fun sensorDao(): SensorDao
 

@@ -17,6 +17,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import com.example.readmymi.TemperatureConverter
 import com.example.readmymi.PercentFormatter
@@ -27,6 +30,7 @@ import java.util.*
 import java.time.format.DateTimeFormatter
 import java.time.Instant
 import java.time.ZoneId
+import com.example.readmymi.ui.getTimeBucketSize
 import com.example.readmymi.ui.getTimeFilterBounds
 import com.example.readmymi.ui.theme.successColor
 import com.example.readmymi.ui.theme.dangerColor
@@ -200,9 +204,10 @@ fun HistoryChartCard(macAddress: String, database: SensorDatabase) {
     var timeFilter by remember { mutableStateOf(0) }
     var endTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
     // Keep endTime moving so newly stored readings appear without changing the filter.
-    LaunchedEffect(timeFilter) {
+    // Structured loop tied to composition: cancels on dispose/filter+MAC change.
+    LaunchedEffect(timeFilter, macAddress) {
         endTime = System.currentTimeMillis()
-        while (true) {
+        while (currentCoroutineContext().isActive) {
             kotlinx.coroutines.delay(60_000)
             endTime = System.currentTimeMillis()
         }
@@ -228,9 +233,9 @@ fun HistoryChartCard(macAddress: String, database: SensorDatabase) {
             }
             
             if (historyData.isNotEmpty()) {
-                SensorChart(historyData, isTemperature = true, tempUnit = tempUnit)
+                SensorChart(historyData, isTemperature = true, tempUnit = tempUnit, timeFilter = timeFilter)
                 Spacer(modifier = Modifier.height(8.dp))
-                SensorChart(historyData, isTemperature = false, tempUnit = tempUnit)
+                SensorChart(historyData, isTemperature = false, tempUnit = tempUnit, timeFilter = timeFilter)
             } else {
                 Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
                     Text("No history data", color = MaterialTheme.colorScheme.onSurfaceVariant)

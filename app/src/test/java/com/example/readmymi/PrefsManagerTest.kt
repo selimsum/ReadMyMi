@@ -147,9 +147,10 @@ class PrefsManagerTest {
     @Test
     fun `setAlertActive stores boolean correctly`() {
         val mac = "AA:BB:CC:DD:EE:FF"
+        whenever(editor.commit()).thenReturn(true)
         prefsManager.setAlertActive(mac, "temp_high", true)
 
         verify(editor).putBoolean("alert_active_$mac:temp_high", true)
-        verify(editor).apply()
+        verify(editor).commit()
     }
 }

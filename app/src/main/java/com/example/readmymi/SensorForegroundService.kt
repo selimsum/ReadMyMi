@@ -15,9 +15,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 import com.example.readmymi.data.SensorDatabase
 import com.example.readmymi.data.SensorEntity
@@ -85,7 +86,7 @@ class SensorForegroundService : Service() {
     private lateinit var prefs: PrefsManager
     private val lastDbSaveMap = ConcurrentHashMap<String, Long>() // Throttle DB saves
     private val dbSaveBuffer = java.util.concurrent.ConcurrentLinkedQueue<SensorEntity>()
-    private var lastDbBatchSaveTime = 0L
+    private val lastDbBatchSaveTime = AtomicLong(0L)
     private var lastVibrationEnabled = true
     private var alertIdCounter = 200
     private val alertKeyIds = ConcurrentHashMap<String, Int>()
@@ -123,8 +124,10 @@ class SensorForegroundService : Service() {
                     runServiceLoop()
                 }
                 serviceScope.launch {
-                    bluetoothSensorManager.sensorDataFlow.collectLatest { data ->
-                        data?.let { handleSensorData(it) }
+                    // collect (not collectLatest): every buffered packet is handled so
+                    // history-sync GATT work is never cancelled by the next advertisement.
+                    bluetoothSensorManager.sensorDataFlow.collect { data ->
+                        handleSensorData(data)
                     }
                 }
             }
@@ -460,7 +463,10 @@ class SensorForegroundService : Service() {
         if (forceSync) {
             AppLogger.log("Service", "Device $mac was offline and is now back online. Forcing history sync...")
         } else if (mode == "start") {
-            if (historyCheckedMap.contains(mac)) {
+            // Persisted marker (not just in-memory historyCheckedMap) so process
+            // restarts don't re-pull the initial 24h/70-record sync every time.
+            if (historyCheckedMap.contains(mac) || prefs.getHistoryChecked(mac)) {
+                historyCheckedMap.add(mac)
                 return
             }
         } else {
@@ -512,16 +518,19 @@ class SensorForegroundService : Service() {
                         prefs.setLastHistorySyncTimestamp(mac, latestSavedTimestamp)
                         prefs.setLastTimeSync(mac, now)
                         prefs.setWasOffline(mac, false)
+                        prefs.setHistoryChecked(mac, true)
                         historyCheckedMap.add(mac)
                         AppLogger.log("Service", "History sync complete: saved ${missingHistory.size} records.")
                     } else {
                         AppLogger.log("Service", "No missing history records found on device.")
                         prefs.setLastHistorySyncTimestamp(mac, incomingTimestamp)
                         prefs.setWasOffline(mac, false)
+                        prefs.setHistoryChecked(mac, true)
                         historyCheckedMap.add(mac)
                     }
                 } else {
                     prefs.setWasOffline(mac, false)
+                    prefs.setHistoryChecked(mac, true)
                     historyCheckedMap.add(mac)
                 }
             } catch (e: Exception) {
@@ -611,7 +620,7 @@ class SensorForegroundService : Service() {
             ))
             lastDbSaveMap[it.macAddress] = now
 
-            if (dbSaveBuffer.size >= 10 || now - lastDbBatchSaveTime > 60000) {
+            if (dbSaveBuffer.size >= 10 || now - lastDbBatchSaveTime.get() > 60000) {
                 flushDbBuffer()
             }
         }
@@ -624,7 +633,7 @@ class SensorForegroundService : Service() {
             dbSaveBuffer.poll()?.let { entitiesToSave.add(it) }
         }
         if (entitiesToSave.isNotEmpty()) {
-            lastDbBatchSaveTime = System.currentTimeMillis()
+            lastDbBatchSaveTime.set(System.currentTimeMillis())
             serviceScope.launch(Dispatchers.IO) {
                 try {
                     database.sensorDao().insertAll(entitiesToSave)
@@ -635,8 +644,27 @@ class SensorForegroundService : Service() {
         }
     }
 
+    /** Synchronous final flush: must run before serviceScope.cancel() in onDestroy. */
+    private fun flushDbBufferSync() {
+        if (dbSaveBuffer.isEmpty()) return
+        val entitiesToSave = mutableListOf<SensorEntity>()
+        while (dbSaveBuffer.isNotEmpty()) {
+            dbSaveBuffer.poll()?.let { entitiesToSave.add(it) }
+        }
+        if (entitiesToSave.isNotEmpty()) {
+            lastDbBatchSaveTime.set(System.currentTimeMillis())
+            runBlocking(Dispatchers.IO) {
+                try {
+                    database.sensorDao().insertAll(entitiesToSave)
+                } catch (e: Exception) {
+                    AppLogger.log("SensorService", "DB Save Error: ${e.message}")
+                }
+            }
+        }
+    }
+
     override fun onDestroy() {
-        flushDbBuffer()
+        flushDbBufferSync()
         super.onDestroy()
         isServiceRunning = false
         isServiceRunningFlow.value = false

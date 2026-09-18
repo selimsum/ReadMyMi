@@ -65,8 +65,13 @@ class PrefsManager(context: Context) {
         return prefs.getBoolean("alert_active_$mac:$key", false)
     }
 
+    /** Persist alert-active state synchronously: relied on across process restarts. */
     fun setAlertActive(mac: String, key: String, active: Boolean) {
-        prefs.edit().putBoolean("alert_active_$mac:$key", active).apply()
+        prefs.edit().putBoolean("alert_active_$mac:$key", active).commit()
+    }
+
+    fun setWasOfflineSync(mac: String, offline: Boolean) {
+        prefs.edit().putBoolean("was_offline_$mac", offline).commit()
     }
 
     fun getDeviceName(mac: String): String {
@@ -127,6 +132,14 @@ class PrefsManager(context: Context) {
     var ongoingNotificationEnabled: Boolean
         get() = prefs.getBoolean("ongoing_notification_enabled", true)
         set(value) = prefs.edit().putBoolean("ongoing_notification_enabled", value).apply()
+
+    fun getHistoryChecked(mac: String): Boolean {
+        return prefs.getBoolean("history_checked_$mac", false)
+    }
+
+    fun setHistoryChecked(mac: String, checked: Boolean) {
+        prefs.edit().putBoolean("history_checked_$mac", checked).apply()
+    }
 
     fun getLastHistorySyncTimestamp(mac: String): Long {
         return prefs.getLong("last_history_sync_$mac", 0L)
