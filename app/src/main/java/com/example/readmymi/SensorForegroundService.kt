@@ -379,6 +379,7 @@ class SensorForegroundService : Service() {
                     AppLogger.log("Service", "Device $targetMac went offline (no data for ${prefs.effectiveOfflineTimeoutMinutes} mins).")
                 }
                 !isCurrentlyOffline && wasOffline -> {
+                    prefs.setWasOffline(targetMac, false)
                     AppLogger.log("Service", "Device $targetMac came back online.")
                     historyCheckedMap.remove(targetMac)
                 }
@@ -438,7 +439,14 @@ class SensorForegroundService : Service() {
         latestReadings[data.macAddress] = data
         updateLastPublish(data.macAddress)
         
-        checkAndDownloadHistory(data.macAddress, data.timestamp)
+        val wasOffline = prefs.getWasOffline(data.macAddress)
+        if (wasOffline) {
+            prefs.setWasOffline(data.macAddress, false)
+            AppLogger.log("Service", "Device ${data.macAddress} came back online.")
+            historyCheckedMap.remove(data.macAddress)
+        }
+        
+        checkAndDownloadHistory(data.macAddress, data.timestamp, wasOffline)
         
         updateLiveNotification(data)
         throttleSaveToDb(data)
@@ -451,14 +459,13 @@ class SensorForegroundService : Service() {
         }
     }
 
-    private fun checkAndDownloadHistory(mac: String, incomingTimestamp: Long) {
+    private fun checkAndDownloadHistory(mac: String, incomingTimestamp: Long, wasOffline: Boolean = false) {
         val mode = prefs.autoHistorySyncMode
         if (mode == "off") {
             return
         }
 
         val now = System.currentTimeMillis()
-        val wasOffline = prefs.getWasOffline(mac)
         val forceSync = wasOffline
 
         if (forceSync) {
@@ -536,6 +543,7 @@ class SensorForegroundService : Service() {
                 }
             } catch (e: Exception) {
                 AppLogger.log("Service", "History sync failed: ${e.message}")
+                prefs.setWasOffline(mac, false)
                 historyCheckedMap.remove(mac)
             } finally {
                 historySyncInFlight.remove(mac)

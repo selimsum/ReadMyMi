@@ -284,6 +284,10 @@ class BluetoothSensorManager(private val context: Context) {
                             AppLogger.log("BluetoothSensorManager", "Download max timeout reached ($maxWaitMs ms)")
                             break
                         }
+                        if (packetsReceived.get() == 0 && (now - startTime) > 15_000L) {
+                            AppLogger.log("BluetoothSensorManager", "Connection or stream start timeout (15s), aborting download")
+                            break
+                        }
                         if (packetsReceived.get() > 0 && (now - lastPacketTime.get()) > 8000L) {
                             AppLogger.log("BluetoothSensorManager", "Stream idle for 8s, completing download with ${historyList.size} records")
                             break

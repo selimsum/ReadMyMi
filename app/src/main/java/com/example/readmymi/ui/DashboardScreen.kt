@@ -107,7 +107,8 @@ fun SensorMainCard(
     val tempOk = data.temperature in 21.0..26.0
     val humidityOk = data.humidity in 30.0..60.0
     val isHappy = tempOk && humidityOk
-    val isOnline = isServiceRunning && !prefs.getWasOffline(data.macAddress)
+    val isReadingFresh = (System.currentTimeMillis() - data.timestamp) <= (prefs.effectiveOfflineTimeoutMinutes * 60 * 1000L)
+    val isOnline = isServiceRunning && isReadingFresh && !prefs.getWasOffline(data.macAddress)
     val lastUpdateTime = remember(data.timestamp) {
         timeFormatter.format(Instant.ofEpochMilli(data.timestamp))
     }
