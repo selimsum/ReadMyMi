@@ -10,13 +10,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -56,7 +55,7 @@ fun DeviceCard(
     }
 
     SettingsCard {
-        SettingsSectionHeader("Connected Device", Icons.Default.Bluetooth)
+        SettingsSectionHeader("Connected Device", Icons.Default.Settings)
 
         if (lastMac.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -152,7 +151,7 @@ fun ServiceCard(
     onShowAbout: () -> Unit
 ) {
     SettingsCard {
-        SettingsSectionHeader("Background Service", Icons.Default.PowerSettingsNew)
+        SettingsSectionHeader("Background Service", Icons.Default.PlayArrow)
 
         val serviceColor = if (isServiceRunning) MaterialTheme.colorScheme.error
         else MaterialTheme.colorScheme.primary
@@ -163,7 +162,7 @@ fun ServiceCard(
             colors = ButtonDefaults.buttonColors(containerColor = serviceColor)
         ) {
             Icon(
-                imageVector = if (isServiceRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
+                imageVector = if (isServiceRunning) Icons.Default.Close else Icons.Default.PlayArrow,
                 contentDescription = null,
                 modifier = Modifier.size(20.dp)
             )

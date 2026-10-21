@@ -2,15 +2,20 @@ package com.example.readmymi.ui.settings
 
 import android.content.Intent
 import android.widget.Toast
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
@@ -59,7 +64,7 @@ fun DiagnosticsCard(prefs: PrefsManager, lastMac: String) {
     }
 
     SettingsCard {
-        SettingsSectionHeader("System Diagnostics", androidx.compose.material.icons.Icons.Default.BugReport)
+        SettingsSectionHeader("System Diagnostics", Icons.Default.Build)
 
         if (recentMacs.isNotEmpty()) {
             Text("Recent Devices", style = MaterialTheme.typography.titleSmall, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
@@ -82,12 +87,12 @@ fun DiagnosticsCard(prefs: PrefsManager, lastMac: String) {
             modifier = Modifier.fillMaxWidth().height(180.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
         ) {
-            val hScrollState = androidx.compose.foundation.rememberScrollState()
+            val hScrollState = rememberScrollState()
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(8.dp)
-                    .androidx.compose.foundation.horizontalScroll(hScrollState),
+                    .horizontalScroll(hScrollState),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 if (logs.isEmpty()) {

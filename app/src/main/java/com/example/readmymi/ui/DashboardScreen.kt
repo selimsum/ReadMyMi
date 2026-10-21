@@ -299,7 +299,7 @@ fun HistoryActions(isDownloading: Boolean, onDownload: (Int) -> Unit) {
                 enabled = !isDownloading,
                 modifier = Modifier.weight(1f).height(46.dp)
             ) {
-                Icon(Icons.Filled.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("Recent (200)")
             }
@@ -308,7 +308,7 @@ fun HistoryActions(isDownloading: Boolean, onDownload: (Int) -> Unit) {
                 enabled = !isDownloading,
                 modifier = Modifier.weight(1f).height(46.dp)
             ) {
-                Icon(Icons.Filled.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("Full (30k)")
             }

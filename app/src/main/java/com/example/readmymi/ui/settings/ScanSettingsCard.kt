@@ -2,7 +2,7 @@ package com.example.readmymi.ui.settings
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.foundation.text.KeyboardOptions
@@ -26,7 +26,7 @@ fun ScanSettingsCard(prefs: PrefsManager) {
     var autoHistorySyncMode by remember { mutableStateOf(prefs.autoHistorySyncMode) }
 
     SettingsCard {
-        SettingsSectionHeader("Scanning & History Sync", Icons.Default.Sync)
+        SettingsSectionHeader("Scanning & History Sync", Icons.Default.Refresh)
 
         DropdownSelector(
             label = "Scan Interval",
