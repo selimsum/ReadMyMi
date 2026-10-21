@@ -59,66 +59,103 @@ fun DiagnosticsCard(prefs: PrefsManager, lastMac: String) {
     }
 
     SettingsCard {
-        Text("Recent Devices", style = MaterialTheme.typography.titleMedium)
-        // Fixed-height box (not a nested LazyColumn: parent is already a LazyColumn,
-        // nested scrolling lists warn/fail lint and break touch handling).
-        Column(
-            modifier = Modifier.fillMaxWidth().height(100.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            recentMacs.take(5).forEach { mac ->
-                Text(
-                    prefs.getDeviceName(mac),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        Text("Logs", style = MaterialTheme.typography.titleMedium)
-        Card(
-            modifier = Modifier.fillMaxWidth().height(200.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            // Static snapshot of last 100 lines: avoids nested LazyColumn inside
-            // the parent LazyColumn (lint: NestedScrollingWidgets).
-            Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
-                logs.takeLast(10).forEach { log ->
-                    Text(log, fontFamily = FontFamily.Monospace, fontSize = 10.sp, maxLines = 1)
+        SettingsSectionHeader("System Diagnostics", androidx.compose.material.icons.Icons.Default.BugReport)
+
+        if (recentMacs.isNotEmpty()) {
+            Text("Recent Devices", style = MaterialTheme.typography.titleSmall, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                recentMacs.take(5).forEach { mac ->
+                    Text(
+                        "${prefs.getDeviceName(mac)} ($mac)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = {
-                clipboardManager.setText(AnnotatedString(logs.joinToString("\n")))
-                Toast.makeText(context, "Logs copied to clipboard", Toast.LENGTH_SHORT).show()
-            }, modifier = Modifier.weight(1f)) {
-                Icon(Icons.Default.ContentCopy, contentDescription = "Copy logs")
+
+        Text("Live Logs", style = MaterialTheme.typography.titleSmall, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+        Card(
+            modifier = Modifier.fillMaxWidth().height(180.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        ) {
+            val hScrollState = androidx.compose.foundation.rememberScrollState()
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(8.dp)
+                    .androidx.compose.foundation.horizontalScroll(hScrollState),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                if (logs.isEmpty()) {
+                    Text(
+                        "No logs recorded yet",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    logs.takeLast(12).forEach { log ->
+                        Text(
+                            text = log,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp,
+                            lineHeight = 14.sp,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                onClick = {
+                    clipboardManager.setText(AnnotatedString(logs.joinToString("\n")))
+                    Toast.makeText(context, "Logs copied to clipboard", Toast.LENGTH_SHORT).show()
+                },
+                modifier = Modifier.weight(1f).height(42.dp)
+            ) {
+                Icon(Icons.Default.ContentCopy, contentDescription = "Copy logs", modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Copy")
             }
-            Button(onClick = {
-                scope.launch {
-                    try {
-                        val file = File(context.cacheDir, "readmymi_logs.txt")
-                        FileOutputStream(file).use { it.write(logs.joinToString("\n").toByteArray()) }
-                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"; putExtra(Intent.EXTRA_STREAM, uri)
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            Button(
+                onClick = {
+                    scope.launch {
+                        try {
+                            val file = File(context.cacheDir, "readmymi_logs.txt")
+                            FileOutputStream(file).use { it.write(logs.joinToString("\n").toByteArray()) }
+                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"; putExtra(Intent.EXTRA_STREAM, uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            context.startActivity(Intent.createChooser(intent, "Share Logs"))
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Failed to share logs: ${e.message}", Toast.LENGTH_LONG).show()
                         }
-                        context.startActivity(Intent.createChooser(intent, "Share Logs"))
-                    } catch (e: Exception) {
-                        Toast.makeText(context, "Failed to share logs: ${e.message}", Toast.LENGTH_LONG).show()
                     }
-                }
-            }, modifier = Modifier.weight(1f)) {
-                Icon(Icons.Default.Share, contentDescription = "Share logs")
+                },
+                modifier = Modifier.weight(1f).height(42.dp)
+            ) {
+                Icon(Icons.Default.Share, contentDescription = "Share logs", modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Share")
             }
-        }
-        if (logs.isNotEmpty()) {
-            TextButton(onClick = { AppLogger.clear() }) { Text("Clear Logs") }
+            if (logs.isNotEmpty()) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { AppLogger.clear() },
+                    modifier = Modifier.height(42.dp)
+                ) {
+                    Text("Clear")
+                }
+            }
         }
     }
 }

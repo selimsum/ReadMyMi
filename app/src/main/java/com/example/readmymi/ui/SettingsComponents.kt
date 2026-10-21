@@ -26,6 +26,7 @@ fun AlertThresholdRow(
             trailingContent = {
                 Switch(checked = enabled, onCheckedChange = onEnabledChange)
             },
+            colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
             modifier = Modifier.fillMaxWidth()
         )
         if (enabled) {
@@ -35,7 +36,7 @@ fun AlertThresholdRow(
                 label = { Text("Threshold Value") },
                 keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
             )
         }
     }

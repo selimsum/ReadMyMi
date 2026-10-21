@@ -1,6 +1,8 @@
 package com.example.readmymi.ui.settings
 
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.foundation.text.KeyboardOptions
@@ -24,6 +26,8 @@ fun ScanSettingsCard(prefs: PrefsManager) {
     var autoHistorySyncMode by remember { mutableStateOf(prefs.autoHistorySyncMode) }
 
     SettingsCard {
+        SettingsSectionHeader("Scanning & History Sync", Icons.Default.Sync)
+
         DropdownSelector(
             label = "Scan Interval",
             options = listOf(15, 60, 300, 900),
@@ -37,7 +41,7 @@ fun ScanSettingsCard(prefs: PrefsManager) {
             onOptionSelected = { s -> scanInterval = s.toString(); prefs.scanIntervalSeconds = s }
         )
         SwitchRow(
-            label = "Override Automatic Offline Detection",
+            label = "Override Offline Detection",
             checked = offlineTimeoutOverride,
             onCheckedChange = { offlineTimeoutOverride = it; prefs.offlineTimeoutOverride = it }
         )
@@ -54,7 +58,8 @@ fun ScanSettingsCard(prefs: PrefsManager) {
                 modifier = Modifier.fillMaxWidth()
             )
         }
-        SettingsHint("Effective Timeout: ${prefs.effectiveOfflineTimeoutMinutes} minutes")
+        SettingsHint("Effective offline timeout: ${prefs.effectiveOfflineTimeoutMinutes} minutes")
+
         DropdownSelector(
             label = "Automatic History Download",
             options = listOf("off", "always", "start"),
@@ -65,8 +70,10 @@ fun ScanSettingsCard(prefs: PrefsManager) {
             onOptionSelected = { m -> autoHistorySyncMode = m; prefs.autoHistorySyncMode = m }
         )
         SettingsHint(
-            "Off: Never automatically download history. Always: Check on every reading. " +
-                "On service start: Check once per service run."
+            "• Off: Never automatically download history\n" +
+            "• Always: Check on every reading\n" +
+            "• On service start: Check once per service run"
         )
     }
 }
+

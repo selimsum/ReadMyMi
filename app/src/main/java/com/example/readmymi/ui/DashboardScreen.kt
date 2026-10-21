@@ -83,7 +83,8 @@ fun DashboardScreen(
         modifier = Modifier.fillMaxSize()
     ) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item { SensorMainCard(sensorData, prefs, isServiceRunning, serviceStatus) }
@@ -118,9 +119,18 @@ fun SensorMainCard(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
     ) {
-        Column(modifier = Modifier.padding(24.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = prefs.getDeviceName(data.macAddress), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Medium)
-            Spacer(modifier = Modifier.height(8.dp))
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 20.dp, vertical = 16.dp)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = prefs.getDeviceName(data.macAddress),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
+            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -130,14 +140,14 @@ fun SensorMainCard(
                     imageVector = if (isOnline) Icons.Filled.CheckCircle else Icons.Filled.CloudOff,
                     contentDescription = if (isOnline) "Online" else "Offline",
                     tint = if (isOnline) successColor() else dangerColor(),
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = "${if (isOnline) "Online" else "Offline"} · Last $lastUpdateTime · Next $nextUpdateTime",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2
+                    maxLines = 1
                 )
             }
             
@@ -145,24 +155,56 @@ fun SensorMainCard(
             val displayTemp = TemperatureConverter.convert(data.temperature, tempUnit)
             val tempLabel = if (tempUnit == "F") "°F" else "°C"
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.DeviceThermostat, contentDescription = null, modifier = Modifier.height(48.dp))
-                Text(text = String.format("%.2f", displayTemp), style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.Bold, fontSize = 64.sp)
-                Text(text = tempLabel, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(start = 4.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(vertical = 4.dp)
+            ) {
+                Icon(
+                    Icons.Filled.DeviceThermostat,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(36.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = String.format(Locale.getDefault(), "%.2f", displayTemp),
+                    style = MaterialTheme.typography.displayMedium,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 46.sp
+                )
+                Text(
+                    text = tempLabel,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(start = 2.dp, top = 4.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Icon(
+                    imageVector = if (isHappy) Icons.Rounded.SentimentSatisfied else Icons.Rounded.SentimentDissatisfied,
+                    contentDescription = if (isHappy) "Conditions OK" else "Conditions out of range",
+                    tint = if (isHappy) successColor() else dangerColor(),
+                    modifier = Modifier.size(28.dp)
+                )
             }
 
-            Icon(
-                imageVector = if (isHappy) Icons.Rounded.SentimentSatisfied else Icons.Rounded.SentimentDissatisfied,
-                contentDescription = if (isHappy) "Conditions OK" else "Conditions out of range",
-                tint = if (isHappy) successColor() else dangerColor(),
-                modifier = Modifier.size(36.dp)
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.12f),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
             )
-            
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
                 StatusItem(Icons.Filled.WaterDrop, PercentFormatter.format(data.humidity), "Humidity")
-                StatusItem(Icons.Filled.BatteryStd, PercentFormatter.format(data.battery), "Battery", color = if (data.battery < 20) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                StatusItem(
+                    Icons.Filled.BatteryStd,
+                    PercentFormatter.format(data.battery),
+                    "Battery",
+                    color = if (data.battery < 20) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                )
             }
-            
         }
     }
 }
@@ -187,10 +229,10 @@ private fun getNextUpdateTime(serviceStatus: String, lastReadingTimestamp: Long,
 fun StatusItem(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String, label: String, color: Color = MaterialTheme.colorScheme.primary) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, contentDescription = label, tint = color)
-        Spacer(modifier = Modifier.width(4.dp))
+        Spacer(modifier = Modifier.width(6.dp))
         Column {
-            Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-            Text(label, style = MaterialTheme.typography.labelSmall)
+            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -248,22 +290,43 @@ fun HistoryChartCard(macAddress: String, database: SensorDatabase) {
 @Composable
 fun HistoryActions(isDownloading: Boolean, onDownload: (Int) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { onDownload(200) }, enabled = !isDownloading, modifier = Modifier.weight(1f)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Button(
+                onClick = { onDownload(200) },
+                enabled = !isDownloading,
+                modifier = Modifier.weight(1f).height(46.dp)
+            ) {
+                Icon(Icons.Filled.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
                 Text("Recent (200)")
             }
-            Button(onClick = { onDownload(30000) }, enabled = !isDownloading, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)) {
+            FilledTonalButton(
+                onClick = { onDownload(30000) },
+                enabled = !isDownloading,
+                modifier = Modifier.weight(1f).height(46.dp)
+            ) {
+                Icon(Icons.Filled.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
                 Text("Full (30k)")
             }
         }
         Text(
-            "Recent: Quick update with latest readings. Full: Complete history download.",
+            "Recent: Quick update with latest readings · Full: Complete history download",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 4.dp)
         )
         if (isDownloading) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            Text("Downloading history...", style = MaterialTheme.typography.labelSmall, modifier = Modifier.align(Alignment.CenterHorizontally))
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+            Text(
+                "Downloading history...",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 2.dp)
+            )
         }
     }
 }

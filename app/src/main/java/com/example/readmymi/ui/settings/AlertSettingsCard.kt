@@ -42,6 +42,8 @@ fun AlertSettingsCard(prefs: PrefsManager) {
     }
 
     SettingsCard {
+        SettingsSectionHeader("Alerts & Thresholds", androidx.compose.material.icons.Icons.Default.NotificationsActive)
+
         ThresholdSwitch(
             "Enable Alerts",
             alertsEnabled,

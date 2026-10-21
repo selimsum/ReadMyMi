@@ -1,16 +1,26 @@
 package com.example.readmymi.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.material3.MaterialTheme
 import com.example.readmymi.ui.theme.md_chartTemperature
 import com.example.readmymi.ui.theme.md_chartHumidity
 import lecho.lib.hellocharts.model.*
@@ -32,17 +42,38 @@ fun SensorChart(
     if (data.isEmpty()) return
 
     val themeColor = if (isTemperature) md_chartTemperature.toArgb() else md_chartHumidity.toArgb()
+    val chartColor = if (isTemperature) md_chartTemperature else md_chartHumidity
     val labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
+    val unit = if (isTemperature) (if (tempUnit == "F") "°F" else "°C") else "%"
+    val title = if (isTemperature) "Temperature ($unit)" else "Humidity ($unit)"
 
     val formatStr = if (data.isNotEmpty() && data.last().timestamp - data.first().timestamp > 86400000L) "dd/MM" else "HH:mm"
     val dateFormatter = remember(formatStr) { DateTimeFormatter.ofPattern(formatStr, Locale.US).withZone(ZoneId.systemDefault()) }
 
-    AndroidView(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(200.dp)
-            .padding(top = 16.dp, bottom = 12.dp),
-        factory = { context ->
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(top = 10.dp, bottom = 4.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(chartColor, shape = CircleShape)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        AndroidView(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(145.dp),
+            factory = { context ->
             LineChartView(context).apply {
                 isInteractive = false
                 isValueSelectionEnabled = false
@@ -171,12 +202,6 @@ fun SensorChart(
                 textColor = labelColor
                 textSize = 10
                 setHasLines(true)
-                val unit = if (isTemperature) {
-                    if (tempUnit == "F") "°F" else "°C"
-                } else {
-                    "%"
-                }
-                name = unit
             }
 
             chartData.axisXBottom = axisX
@@ -185,4 +210,5 @@ fun SensorChart(
             chartView.lineChartData = chartData
         }
     )
+}
 }

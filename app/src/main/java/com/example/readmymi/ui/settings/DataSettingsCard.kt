@@ -51,6 +51,8 @@ fun DataSettingsCard(prefs: PrefsManager) {
     }
 
     SettingsCard {
+        SettingsSectionHeader("Data Storage", androidx.compose.material.icons.Icons.Default.Storage)
+
         com.example.readmymi.ui.DropdownSelector(
             label = "Auto-delete Old Data",
             options = listOf(0, 7, 30, 90, 180, 365),

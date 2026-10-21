@@ -70,29 +70,10 @@ fun SettingsScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .padding(16.dp),
+                .padding(innerPadding),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = TemperatureConverter.format(22.0, tempUnit),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Text(
-                    liveStatus,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            item { AlertSettingsCard(prefs) }
-            item { ScanSettingsCard(prefs) }
-            item { DisplaySettingsCard(prefs) }
-            item { DataSettingsCard(prefs) }
-            item { DiagnosticsCard(prefs, lastMac) }
             item {
                 DeviceCard(
                     prefs = prefs,
@@ -100,6 +81,11 @@ fun SettingsScreen(
                     onClearLastMac = onClearLastMac
                 )
             }
+            item { ScanSettingsCard(prefs) }
+            item { DisplaySettingsCard(prefs) }
+            item { AlertSettingsCard(prefs) }
+            item { DataSettingsCard(prefs) }
+            item { DiagnosticsCard(prefs, lastMac) }
             item {
                 ServiceCard(
                     isServiceRunning = isServiceRunning,

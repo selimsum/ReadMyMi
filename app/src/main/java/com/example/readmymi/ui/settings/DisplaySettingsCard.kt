@@ -1,5 +1,7 @@
 package com.example.readmymi.ui.settings
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -16,6 +18,8 @@ fun DisplaySettingsCard(prefs: PrefsManager) {
     var ongoingNotificationEnabled by remember { mutableStateOf(prefs.ongoingNotificationEnabled) }
 
     SettingsCard {
+        SettingsSectionHeader("Display & Notifications", Icons.Default.Notifications)
+
         DropdownSelector(
             label = "Temperature Unit",
             options = listOf("C", "F"),
@@ -31,3 +35,4 @@ fun DisplaySettingsCard(prefs: PrefsManager) {
         SettingsHint("When enabled, notification shows sensor data. When disabled, a minimal silent notification is shown.")
     }
 }
+
