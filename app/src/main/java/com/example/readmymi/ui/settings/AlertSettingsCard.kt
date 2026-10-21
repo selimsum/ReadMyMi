@@ -1,5 +1,7 @@
 package com.example.readmymi.ui.settings
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,7 +44,7 @@ fun AlertSettingsCard(prefs: PrefsManager) {
     }
 
     SettingsCard {
-        SettingsSectionHeader("Alerts & Thresholds", androidx.compose.material.icons.Icons.Default.Notifications)
+        SettingsSectionHeader("Alerts & Thresholds", Icons.Default.Notifications)
 
         ThresholdSwitch(
             "Enable Alerts",
