@@ -359,6 +359,45 @@ class SensorParserTest {
     }
 
     @Test
+    fun testParseBTHome_AlternatingData1Data2_VoltageStabilization() {
+        // Data1 payload carries rawBattPct (68%), temp, hum, but no voltage
+        val payload1 = byteArrayOf(
+            0x40.toByte(),
+            0x00.toByte(), 0x4D.toByte(),
+            0x01.toByte(), 68.toByte(),
+            0x02.toByte(), 0x0C.toByte(), 0x08.toByte(), // 20.6C
+            0x03.toByte(), 0xD0.toByte(), 0x1A.toByte()  // 68.64%
+        )
+        // Data2 payload carries voltage (2747mV -> 34%), power, opening, but no temp/hum or rawBattPct
+        val payload2 = byteArrayOf(
+            0x40.toByte(),
+            0x00.toByte(), 0x07.toByte(),
+            0x0C.toByte(), 0xBB.toByte(), 0x0A.toByte(), // 2747mV -> 34%
+            0x10.toByte(), 0x00.toByte(),
+            0x11.toByte(), 0x01.toByte()
+        )
+
+        val r1 = SensorParser.parse("ATC_BE9C3E", "A4:C1:38:BE:9C:3E", mapOf("fcd2" to payload1))
+        assertNotNull(r1)
+        assertEquals(20.6, r1?.temperature)
+        assertEquals(68.64, r1?.humidity)
+        assertEquals(68, r1?.battery)
+
+        val r2 = SensorParser.parse("ATC_BE9C3E", "A4:C1:38:BE:9C:3E", mapOf("fcd2" to payload2))
+        assertNotNull(r2)
+        assertEquals(20.6, r2?.temperature)
+        assertEquals(68.64, r2?.humidity)
+        assertEquals(34, r2?.battery)
+
+        // Subsequent Data1 payload uses cached voltage so it doesn't jump back to 68%
+        val r3 = SensorParser.parse("ATC_BE9C3E", "A4:C1:38:BE:9C:3E", mapOf("fcd2" to payload1))
+        assertNotNull(r3)
+        assertEquals(20.6, r3?.temperature)
+        assertEquals(68.64, r3?.humidity)
+        assertEquals(34, r3?.battery)
+    }
+
+    @Test
     fun testParseBTHome_PowerAndOpeningAreNotTempHum() {
         // Official BTHome v2: 0x10 = power (uint8), 0x11 = opening (uint8).
         // They must not be decoded as temperature/humidity.

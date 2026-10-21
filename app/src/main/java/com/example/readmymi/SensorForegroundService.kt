@@ -85,6 +85,7 @@ class SensorForegroundService : Service() {
     private lateinit var database: SensorDatabase
     private lateinit var prefs: PrefsManager
     private val lastDbSaveMap = ConcurrentHashMap<String, Long>() // Throttle DB saves
+    private val lastSaveWasCachedMap = ConcurrentHashMap<String, Boolean>()
     private val dbSaveBuffer = java.util.concurrent.ConcurrentLinkedQueue<SensorEntity>()
     private val lastDbBatchSaveTime = AtomicLong(0L)
     private var lastVibrationEnabled = true
@@ -610,7 +611,8 @@ class SensorForegroundService : Service() {
     private fun throttleSaveToDb(it: SensorData) {
         val now = System.currentTimeMillis()
         val lastSave = lastDbSaveMap[it.macAddress] ?: 0L
-        if (now - lastSave > 60000) {
+        val lastSaveWasCached = lastSaveWasCachedMap[it.macAddress] ?: false
+        if (now - lastSave > 60000 || (!it.isCachedReading && lastSaveWasCached)) {
             dbSaveBuffer.add(SensorEntity(
                 macAddress = it.macAddress,
                 temperature = it.temperature.toFloat(),
@@ -619,6 +621,7 @@ class SensorForegroundService : Service() {
                 timestamp = it.timestamp
             ))
             lastDbSaveMap[it.macAddress] = now
+            lastSaveWasCachedMap[it.macAddress] = it.isCachedReading
 
             if (dbSaveBuffer.size >= 10 || now - lastDbBatchSaveTime.get() > 60000) {
                 flushDbBuffer()

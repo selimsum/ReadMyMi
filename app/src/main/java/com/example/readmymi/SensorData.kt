@@ -6,5 +6,6 @@ data class SensorData(
     val temperature: Double,
     val humidity: Double,
     val battery: Int,
-    val timestamp: Long
+    val timestamp: Long,
+    val isCachedReading: Boolean = false
 )

@@ -13,6 +13,7 @@ object SensorParser {
     private const val ROUNDING_MULTIPLIER = 100.0
 
     private val lastKnownReadings = ConcurrentHashMap<String, Pair<Double, Double>>()
+    private val lastKnownVoltage = ConcurrentHashMap<String, Int>()
 
     fun setLastKnown(mac: String, temperature: Double, humidity: Double) {
         lastKnownReadings[mac] = Pair(temperature, humidity)
@@ -20,6 +21,7 @@ object SensorParser {
 
     fun clearCache() {
         lastKnownReadings.clear()
+        lastKnownVoltage.clear()
     }
     
     fun calculateBatteryPercentage(voltageMv: Int): Int {
@@ -118,9 +120,17 @@ object SensorParser {
             }
         }
 
+        if (rawVoltageMv != null) {
+            lastKnownVoltage[mac] = rawVoltageMv
+        }
+        val effectiveVoltageMv = rawVoltageMv ?: lastKnownVoltage[mac]
+        if (effectiveVoltageMv != null && voltageBattPct == null) {
+            voltageBattPct = calculateBatteryPercentage(effectiveVoltageMv)
+        }
+
         val batt = voltageBattPct ?: rawBattPct ?: 0
-        if (rawVoltageMv != null || rawBattPct != null) {
-            AppLogger.log("Parser", "BTHome parsed $mac: voltage=$rawVoltageMv mV -> percentage=$voltageBattPct%, rawBattPct=$rawBattPct% -> final=$batt%")
+        if (rawVoltageMv != null || rawBattPct != null || effectiveVoltageMv != null) {
+            AppLogger.log("Parser", "BTHome parsed $mac: voltage=$rawVoltageMv mV (eff=$effectiveVoltageMv mV) -> percentage=$voltageBattPct%, rawBattPct=$rawBattPct% -> final=$batt%")
         }
 
         if (temp != 0.0 || hum != 0.0) {
@@ -135,7 +145,8 @@ object SensorParser {
                     temperature = cached.first,
                     humidity = cached.second,
                     battery = batt,
-                    timestamp = System.currentTimeMillis()
+                    timestamp = System.currentTimeMillis(),
+                    isCachedReading = true
                 )
             }
         }
