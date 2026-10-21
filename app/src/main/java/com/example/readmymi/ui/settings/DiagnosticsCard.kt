@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -82,7 +84,23 @@ fun DiagnosticsCard(prefs: PrefsManager, lastMac: String) {
             }
         }
 
-        Text("Live Logs", style = MaterialTheme.typography.titleSmall, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Live Logs", style = MaterialTheme.typography.titleSmall, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+            if (logs.isNotEmpty()) {
+                TextButton(
+                    onClick = { AppLogger.clear() },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    modifier = Modifier.height(28.dp)
+                ) {
+                    Text("Clear Logs", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
+
         Card(
             modifier = Modifier.fillMaxWidth().height(180.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
@@ -124,11 +142,12 @@ fun DiagnosticsCard(prefs: PrefsManager, lastMac: String) {
                     clipboardManager.setText(AnnotatedString(logs.joinToString("\n")))
                     Toast.makeText(context, "Logs copied to clipboard", Toast.LENGTH_SHORT).show()
                 },
-                modifier = Modifier.weight(1f).height(42.dp)
+                modifier = Modifier.weight(1f).height(44.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp)
             ) {
                 Icon(Icons.Default.ContentCopy, contentDescription = "Copy logs", modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Copy")
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Copy", maxLines = 1)
             }
             Button(
                 onClick = {
@@ -147,19 +166,12 @@ fun DiagnosticsCard(prefs: PrefsManager, lastMac: String) {
                         }
                     }
                 },
-                modifier = Modifier.weight(1f).height(42.dp)
+                modifier = Modifier.weight(1f).height(44.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp)
             ) {
                 Icon(Icons.Default.Share, contentDescription = "Share logs", modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Share")
-            }
-            if (logs.isNotEmpty()) {
-                androidx.compose.material3.OutlinedButton(
-                    onClick = { AppLogger.clear() },
-                    modifier = Modifier.height(42.dp)
-                ) {
-                    Text("Clear")
-                }
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Share", maxLines = 1)
             }
         }
     }

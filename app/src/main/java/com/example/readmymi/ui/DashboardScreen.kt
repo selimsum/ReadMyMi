@@ -314,7 +314,7 @@ fun HistoryActions(isDownloading: Boolean, onDownload: (Int) -> Unit) {
             }
         }
         Text(
-            "Recent: Quick update with latest readings · Full: Complete history download",
+            text = "Recent: Quick update with latest readings.\nFull: Complete history download.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 4.dp)
