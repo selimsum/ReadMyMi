@@ -25,24 +25,7 @@ object SensorParser {
     }
     
     fun calculateBatteryPercentage(voltageMv: Int): Int {
-        return when {
-            voltageMv >= 3000 -> 100
-            voltageMv >= 2900 -> {
-                80 + ((voltageMv - 2900) * 20 / 100)
-            }
-            voltageMv >= 2800 -> {
-                50 + ((voltageMv - 2800) * 30 / 100)
-            }
-            voltageMv >= 2700 -> {
-                20 + ((voltageMv - 2700) * 30 / 100)
-            }
-            voltageMv >= 2500 -> {
-                5 + ((voltageMv - 2500) * 15 / 200)
-            }
-            else -> {
-                ((voltageMv - 2100).coerceAtLeast(0) * 5 / 400)
-            }
-        }
+        return ((voltageMv - 2200) * 100 / 800).coerceIn(0, 100)
     }
 
     fun parse(deviceName: String, macAddress: String, serviceData: Map<String, ByteArray>): SensorData? {
@@ -128,7 +111,7 @@ object SensorParser {
             voltageBattPct = calculateBatteryPercentage(effectiveVoltageMv)
         }
 
-        val batt = voltageBattPct ?: rawBattPct ?: 0
+        val batt = rawBattPct ?: voltageBattPct ?: 0
         if (rawVoltageMv != null || rawBattPct != null || effectiveVoltageMv != null) {
             AppLogger.log("Parser", "BTHome parsed $mac: voltage=$rawVoltageMv mV (eff=$effectiveVoltageMv mV) -> percentage=$voltageBattPct%, rawBattPct=$rawBattPct% -> final=$batt%")
         }

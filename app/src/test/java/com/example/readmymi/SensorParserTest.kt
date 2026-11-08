@@ -35,27 +35,21 @@ class SensorParserTest {
         assertEquals(100, SensorParser.calculateBatteryPercentage(3100))
         assertEquals(100, SensorParser.calculateBatteryPercentage(3000))
 
-        // 2900mV - 2999mV
-        assertEquals(90, SensorParser.calculateBatteryPercentage(2950))
-        assertEquals(80, SensorParser.calculateBatteryPercentage(2900))
+        // Linear interpolation between 2200mV (0%) and 3000mV (100%): (mV - 2200) * 100 / 800
+        assertEquals(93, SensorParser.calculateBatteryPercentage(2950))
+        assertEquals(87, SensorParser.calculateBatteryPercentage(2900))
+        assertEquals(81, SensorParser.calculateBatteryPercentage(2850))
+        assertEquals(75, SensorParser.calculateBatteryPercentage(2800))
+        assertEquals(68, SensorParser.calculateBatteryPercentage(2750))
+        assertEquals(62, SensorParser.calculateBatteryPercentage(2700))
+        assertEquals(50, SensorParser.calculateBatteryPercentage(2600))
+        assertEquals(37, SensorParser.calculateBatteryPercentage(2500))
+        assertEquals(25, SensorParser.calculateBatteryPercentage(2400))
+        assertEquals(12, SensorParser.calculateBatteryPercentage(2300))
+        assertEquals(0, SensorParser.calculateBatteryPercentage(2200))
 
-        // 2800mV - 2899mV
-        assertEquals(65, SensorParser.calculateBatteryPercentage(2850))
-        assertEquals(50, SensorParser.calculateBatteryPercentage(2800))
-
-        // 2700mV - 2799mV
-        assertEquals(35, SensorParser.calculateBatteryPercentage(2750))
-        assertEquals(20, SensorParser.calculateBatteryPercentage(2700))
-
-        // 2500mV - 2699mV
-        assertEquals(12, SensorParser.calculateBatteryPercentage(2600))
-        assertEquals(5, SensorParser.calculateBatteryPercentage(2500))
-
-        // < 2500mV (down to 2100mV)
-        assertEquals(2, SensorParser.calculateBatteryPercentage(2300))
+        // <= 2200mV
         assertEquals(0, SensorParser.calculateBatteryPercentage(2100))
-
-        // < 2100mV (edge case)
         assertEquals(0, SensorParser.calculateBatteryPercentage(2000))
         assertEquals(0, SensorParser.calculateBatteryPercentage(0))
         assertEquals(0, SensorParser.calculateBatteryPercentage(-100))
@@ -117,7 +111,7 @@ class SensorParserTest {
         // Info: 0x40
         // Temp: type 0x02, value 2000 -> LE: D0 07
         // Voltage: type 0x0C, value 3000 (3.000V) -> 3000 is 0x0BB8 -> LE: B8 0B
-        // Battery should be 100% under CR2032 non-linear mapping
+        // Battery should be 100% under ATC_MiThermometer linear mapping
         val payload = byteArrayOf(
             0x40.toByte(),
             0x02.toByte(), 0xD0.toByte(), 0x07.toByte(),
@@ -132,12 +126,12 @@ class SensorParserTest {
     }
 
     @Test
-    fun testParseBTHome_VoltagePriority() {
+    fun testParseBTHome_RawBatteryPriority() {
         // Info: 0x40
         // Batt (percentage): type 0x01, value 99 (99%) -> 0x63
         // Temp: type 0x02, value 2000 -> LE: D0 07
         // Voltage: type 0x0C, value 2800 (2.800V) -> 0x0AF0 -> LE: F0 0A
-        // Battery should be calculated from voltage (50%), not raw 99%
+        // Broadcast raw battery percentage has priority over voltage-derived percentage
         val payload = byteArrayOf(
             0x40.toByte(),
             0x01.toByte(), 99.toByte(),
@@ -149,7 +143,7 @@ class SensorParserTest {
         val result = SensorParser.parse("TestDevice", "00:11:22:33:44:55", serviceData)
 
         assertEquals(20.0, result?.temperature)
-        assertEquals(50, result?.battery)
+        assertEquals(99, result?.battery)
     }
 
     @Test
@@ -158,7 +152,7 @@ class SensorParserTest {
         // Temp at offset 6: value 2150 (21.5C) -> 2150 is 0x0866 -> LE: 66 08
         // Hum at offset 8 (uint16): value 5500 (55.0%) -> 5500 is 0x157C -> LE: 7C 15
         // Voltage at offset 10 (uint16): value 2800 (2.8V) -> 0x0AF0 -> LE: F0 0A
-        // Battery is derived from voltage -> 50%
+        // Battery is derived from voltage (2800mV -> 75%)
         val payload = ByteArray(12)
         payload[6] = 0x66.toByte()
         payload[7] = 0x08.toByte()
@@ -172,7 +166,7 @@ class SensorParserTest {
 
         assertEquals(21.5, result?.temperature)
         assertEquals(55.0, result?.humidity)
-        assertEquals(50, result?.battery)
+        assertEquals(75, result?.battery)
     }
 
     @Test
@@ -196,7 +190,7 @@ class SensorParserTest {
         
         assertEquals(21.5, result?.temperature)
         assertEquals(63.0, result?.humidity)
-        assertEquals(50, result?.battery) // Derived from 2800mV, not the 99% broadcast byte
+        assertEquals(75, result?.battery) // Derived from 2800mV (75%)
     }
 
     @Test
@@ -234,7 +228,7 @@ class SensorParserTest {
         // Temp at 11: 250 (25.0) -> FA 00
         // Hum at 13: 500 (50.0) -> F4 01
         // Voltage at 15: value 2800 (2.8V) -> 0x0AF0 -> LE: F0 0A
-        // Batt = 50% under CR2032 non-linear mapping
+        // Batt = 75% under linear mapping (2800mV -> 75%)
         val payload = ByteArray(17)
         payload[11] = 0xFA.toByte()
         payload[12] = 0x00.toByte()
@@ -251,7 +245,7 @@ class SensorParserTest {
 
         assertEquals(25.0, result?.temperature)
         assertEquals(50.0, result?.humidity)
-        assertEquals(50, result?.battery)
+        assertEquals(75, result?.battery)
     }
 
     @Test
@@ -343,7 +337,7 @@ class SensorParserTest {
         assertEquals(55.0, result1?.humidity)
         assertEquals(80, result1?.battery)
 
-        // Now parse data2 variant (voltage only 2893mV -> 77% battery)
+        // Now parse data2 variant (voltage only 2893mV -> 86% battery)
         val payload2 = byteArrayOf(
             0x40.toByte(),
             0x00.toByte(), 0x7C.toByte(),
@@ -355,7 +349,7 @@ class SensorParserTest {
         assertNotNull(result2)
         assertEquals(23.5, result2?.temperature)
         assertEquals(55.0, result2?.humidity)
-        assertEquals(77, result2?.battery)
+        assertEquals(86, result2?.battery)
     }
 
     @Test
@@ -368,11 +362,11 @@ class SensorParserTest {
             0x02.toByte(), 0x0C.toByte(), 0x08.toByte(), // 20.6C
             0x03.toByte(), 0xD0.toByte(), 0x1A.toByte()  // 68.64%
         )
-        // Data2 payload carries voltage (2747mV -> 34%), power, opening, but no temp/hum or rawBattPct
+        // Data2 payload carries voltage (2747mV -> 68%), power, opening, but no temp/hum or rawBattPct
         val payload2 = byteArrayOf(
             0x40.toByte(),
             0x00.toByte(), 0x07.toByte(),
-            0x0C.toByte(), 0xBB.toByte(), 0x0A.toByte(), // 2747mV -> 34%
+            0x0C.toByte(), 0xBB.toByte(), 0x0A.toByte(), // 2747mV -> 68%
             0x10.toByte(), 0x00.toByte(),
             0x11.toByte(), 0x01.toByte()
         )
@@ -387,14 +381,14 @@ class SensorParserTest {
         assertNotNull(r2)
         assertEquals(20.6, r2?.temperature)
         assertEquals(68.64, r2?.humidity)
-        assertEquals(34, r2?.battery)
+        assertEquals(68, r2?.battery)
 
-        // Subsequent Data1 payload uses cached voltage so it doesn't jump back to 68%
+        // Subsequent Data1 payload uses rawBattPct (68%)
         val r3 = SensorParser.parse("ATC_BE9C3E", "A4:C1:38:BE:9C:3E", mapOf("fcd2" to payload1))
         assertNotNull(r3)
         assertEquals(20.6, r3?.temperature)
         assertEquals(68.64, r3?.humidity)
-        assertEquals(34, r3?.battery)
+        assertEquals(68, r3?.battery)
     }
 
     @Test
