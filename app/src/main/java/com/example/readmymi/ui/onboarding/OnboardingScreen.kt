@@ -113,11 +113,7 @@ fun OnboardingScreen(
                 when (currentStage) {
                     OnboardingStage.WELCOME -> {
                         WelcomeContent(
-                            onGetStarted = { stage = OnboardingStage.PERMISSIONS },
-                            onTryDemo = {
-                                viewModel.enableDemoMode()
-                                onComplete()
-                            }
+                            onGetStarted = { stage = OnboardingStage.PERMISSIONS }
                         )
                     }
 
@@ -151,10 +147,6 @@ fun OnboardingScreen(
                                 }
                             },
                             onOpenTroubleshooting = { showTroubleshootingSheet = true },
-                            onTryDemo = {
-                                viewModel.enableDemoMode()
-                                onComplete()
-                            },
                             onRescan = {
                                 viewModel.restartService()
                                 scanSecondsElapsed = 0
@@ -173,10 +165,6 @@ fun OnboardingScreen(
             onRescan = {
                 viewModel.restartService()
                 scanSecondsElapsed = 0
-            },
-            onTryDemo = {
-                viewModel.enableDemoMode()
-                onComplete()
             }
         )
     }
@@ -256,8 +244,7 @@ fun OnboardingScreen(
 
 @Composable
 private fun WelcomeContent(
-    onGetStarted: () -> Unit,
-    onTryDemo: () -> Unit
+    onGetStarted: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -349,8 +336,7 @@ private fun WelcomeContent(
 
         // Actions
         Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.fillMaxWidth()
         ) {
             Button(
                 onClick = onGetStarted,
@@ -362,18 +348,6 @@ private fun WelcomeContent(
                 Text("Get Started", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.width(8.dp))
                 Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(20.dp))
-            }
-
-            OutlinedButton(
-                onClick = onTryDemo,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp),
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                Icon(Icons.Default.Preview, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Explore with In-Memory Demo Sensor", fontSize = 14.sp)
             }
         }
     }
@@ -389,7 +363,6 @@ private fun RadarDiscoveryContent(
     onSelectSensor: (SensorData) -> Unit,
     onPauseOrRename: () -> Unit,
     onOpenTroubleshooting: () -> Unit,
-    onTryDemo: () -> Unit,
     onRescan: () -> Unit
 ) {
     Column(
@@ -486,22 +459,13 @@ private fun RadarDiscoveryContent(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            Button(
+                                onClick = onOpenTroubleshooting,
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                OutlinedButton(
-                                    onClick = onOpenTroubleshooting,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("Help & Flasher", fontSize = 12.sp)
-                                }
-                                Button(
-                                    onClick = onTryDemo,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("Try Demo Mode", fontSize = 12.sp)
-                                }
+                                Icon(Icons.Default.HelpOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Sensor Help & Web Flasher", fontSize = 13.sp)
                             }
                         }
                     }

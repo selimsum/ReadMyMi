@@ -81,7 +81,6 @@ fun MainScreen(viewModel: MainViewModel) {
     val lastMac by viewModel.lastMac.collectAsState()
     val isRunning by viewModel.isServiceRunning.collectAsState()
     val sensorData by viewModel.sensorData.collectAsState()
-    val isDemoMode by viewModel.isDemoMode.collectAsState()
     
     var showSettings by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
@@ -247,18 +246,8 @@ fun MainScreen(viewModel: MainViewModel) {
                     database = database,
                     isServiceRunning = isRunning,
                     isDownloading = isDownloading,
-                    isDemoMode = isDemoMode,
-                    demoHistoryData = viewModel.demoHistoryData,
                     onRefresh = { viewModel.restartService() },
-                    onExitDemo = {
-                        viewModel.exitDemoMode()
-                        isOnboardingActive = true
-                    },
                     onDownloadHistory = { records: Int ->
-                        if (isDemoMode) {
-                            Toast.makeText(context, "History download is disabled in Demo Mode.", Toast.LENGTH_SHORT).show()
-                            return@DashboardScreen
-                        }
                         // Rotation-safe: the work runs in the ViewModel scope.
                         isDownloading = true
                         viewModel.downloadHistory(records) { ok, message ->

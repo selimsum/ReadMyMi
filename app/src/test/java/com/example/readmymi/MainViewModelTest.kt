@@ -20,8 +20,6 @@ import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 
 class MainViewModelTest {
 
@@ -78,40 +76,6 @@ class MainViewModelTest {
         whenever(editor.putString(anyString(), anyString())).thenReturn(editor)
         viewModel.updateLastMac("00:11:22:33:44:55")
         verify(editor, never()).putString(anyString(), anyString())
-    }
-
-    @Test
-    fun testDemoModeToggle() {
-        val application = mock<Application>()
-        val context = mock<Context>()
-        val prefs = mock<SharedPreferences>()
-        val editor = mock<SharedPreferences.Editor>()
-
-        whenever(application.applicationContext).thenReturn(context)
-        whenever(context.applicationContext).thenReturn(context)
-        whenever(context.getSharedPreferences(anyString(), anyInt())).thenReturn(prefs)
-        whenever(prefs.getString(anyString(), anyOrNull())).thenReturn("")
-        whenever(prefs.edit()).thenReturn(editor)
-        whenever(editor.putBoolean(anyString(), anyBoolean())).thenReturn(editor)
-        whenever(editor.putString(anyString(), anyString())).thenReturn(editor)
-
-        val mockDbInstance = mock<SensorDatabase>()
-        val mockDao = mock<SensorDao>()
-        whenever(mockDbInstance.sensorDao()).thenReturn(mockDao)
-        whenever(mockDao.getLatest(anyString())).thenReturn(emptyFlow())
-        SensorDatabase.setTestInstance(mockDbInstance)
-
-        val viewModel = MainViewModel(application)
-
-        assertFalse(viewModel.isDemoMode.value)
-
-        viewModel.enableDemoMode()
-        assertTrue(viewModel.isDemoMode.value)
-        verify(editor).putBoolean("has_completed_onboarding", true)
-
-        viewModel.exitDemoMode()
-        assertFalse(viewModel.isDemoMode.value)
-        verify(editor).putBoolean("has_completed_onboarding", false)
     }
 
     @Test

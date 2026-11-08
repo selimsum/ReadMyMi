@@ -28,7 +28,6 @@ import com.example.readmymi.PercentFormatter
 import com.example.readmymi.PrefsManager
 import com.example.readmymi.SensorData
 import com.example.readmymi.data.SensorDatabase
-import com.example.readmymi.data.SensorEntity
 import java.util.*
 import java.time.format.DateTimeFormatter
 import java.time.Instant
@@ -49,11 +48,8 @@ fun DashboardScreen(
     database: SensorDatabase,
     isServiceRunning: Boolean,
     isDownloading: Boolean,
-    isDemoMode: Boolean = false,
-    demoHistoryData: List<SensorEntity> = emptyList(),
     onRefresh: () -> Unit,
-    onDownloadHistory: (Int) -> Unit,
-    onExitDemo: () -> Unit = {}
+    onDownloadHistory: (Int) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     var isRefreshing by remember { mutableStateOf(false) }
@@ -108,70 +104,9 @@ fun DashboardScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            if (isDemoMode) {
-                item {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Preview,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onTertiaryContainer
-                                )
-                                Column {
-                                    Text(
-                                        text = "In-Memory Demo Sensor",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onTertiaryContainer
-                                    )
-                                    Text(
-                                        text = "No records written to local database",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onTertiaryContainer
-                                    )
-                                }
-                            }
-                            Button(
-                                onClick = onExitDemo,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
-                                ),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text("Pair Sensor", fontSize = 12.sp)
-                            }
-                        }
-                    }
-                }
-            }
-
             item { SensorMainCard(sensorData, prefs, isServiceRunning, serviceStatus) }
-            item {
-                HistoryChartCard(
-                    macAddress = sensorData.macAddress,
-                    database = database,
-                    customHistory = if (isDemoMode) demoHistoryData else null
-                )
-            }
-            if (!isDemoMode) {
-                item { HistoryActions(isDownloading, onDownloadHistory) }
-            }
+            item { HistoryChartCard(sensorData.macAddress, database) }
+            item { HistoryActions(isDownloading, onDownloadHistory) }
         }
     }
 }
@@ -321,11 +256,7 @@ fun StatusItem(icon: androidx.compose.ui.graphics.vector.ImageVector, value: Str
 }
 
 @Composable
-fun HistoryChartCard(
-    macAddress: String,
-    database: SensorDatabase,
-    customHistory: List<SensorEntity>? = null
-) {
+fun HistoryChartCard(macAddress: String, database: SensorDatabase) {
     val context = LocalContext.current
     val prefs = remember { PrefsManager(context) }
     val tempUnit = prefs.tempUnit
@@ -343,14 +274,7 @@ fun HistoryChartCard(
     }
     val (startTime, _) = getTimeFilterBounds(timeFilter, endTime)
     
-    val dbHistory by database.sensorDao().getHistory(macAddress, startTime, endTime).collectAsState(initial = emptyList())
-    val historyData = remember(customHistory, dbHistory, startTime, endTime) {
-        if (customHistory != null) {
-            customHistory.filter { it.timestamp in startTime..endTime }
-        } else {
-            dbHistory
-        }
-    }
+    val historyData by database.sensorDao().getHistory(macAddress, startTime, endTime).collectAsState(initial = emptyList())
     
     Card(
         modifier = Modifier.fillMaxWidth(),

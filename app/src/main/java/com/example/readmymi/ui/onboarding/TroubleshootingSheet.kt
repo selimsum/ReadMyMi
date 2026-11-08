@@ -25,8 +25,7 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun TroubleshootingSheet(
     onDismiss: () -> Unit,
-    onRescan: () -> Unit,
-    onTryDemo: () -> Unit
+    onRescan: () -> Unit
 ) {
     val context = LocalContext.current
     val flasherUrl = "https://pvvx.github.io/ATC_MiThermometer/TelinkMiFlasher.html"
@@ -148,32 +147,17 @@ fun TroubleshootingSheet(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Action buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            // Action button
+            Button(
+                onClick = {
+                    onDismiss()
+                    onRescan()
+                },
+                modifier = Modifier.fillMaxWidth()
             ) {
-                OutlinedButton(
-                    onClick = {
-                        onDismiss()
-                        onTryDemo()
-                    },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Try Demo Mode", fontSize = 13.sp)
-                }
-
-                Button(
-                    onClick = {
-                        onDismiss()
-                        onRescan()
-                    },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Rescan", fontSize = 13.sp)
-                }
+                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Rescan for Sensors", fontSize = 14.sp)
             }
         }
     }
