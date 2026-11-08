@@ -24,7 +24,15 @@ jobs:
       run: chmod +x gradlew
 
     - name: Run unit tests
-      run: ./gradlew testDebugUnitTest --info
+      run: |
+        ./gradlew testDebugUnitTest || {
+          echo "================ TEST FAILURES ================"
+          for f in $(find app/build/test-results -name "*.xml"); do
+            echo "--- $f ---"
+            cat "$f"
+          done
+          exit 1
+        }
 
     - name: Lint
       run: ./gradlew lintDebug
