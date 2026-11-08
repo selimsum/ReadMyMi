@@ -1,6 +1,7 @@
 package com.example.readmymi.data
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -40,6 +41,11 @@ abstract class SensorDatabase : RoomDatabase() {
             db.execSQL("DROP TABLE sensor_data")
             db.execSQL("ALTER TABLE sensor_data_new RENAME TO sensor_data")
             db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_sensor_data_macAddress_timestamp ON sensor_data(macAddress, timestamp)")
+        }
+
+        @VisibleForTesting
+        internal fun setTestInstance(instance: SensorDatabase?) {
+            INSTANCE = instance
         }
 
         @JvmStatic

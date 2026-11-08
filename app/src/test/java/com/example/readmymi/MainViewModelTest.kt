@@ -34,6 +34,7 @@ class MainViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        SensorDatabase.setTestInstance(null)
     }
 
     @Test
@@ -50,33 +51,31 @@ class MainViewModelTest {
         whenever(prefs.edit()).thenReturn(editor)
         whenever(editor.putString(anyString(), anyString())).thenReturn(editor)
 
-        mockStatic(SensorDatabase::class.java).use { mockedDb ->
-            val mockDbInstance = mock<SensorDatabase>()
-            val mockDao = mock<SensorDao>()
-            whenever(mockDbInstance.sensorDao()).thenReturn(mockDao)
-            mockedDb.`when`<SensorDatabase> { SensorDatabase.getDatabase(context) }.thenReturn(mockDbInstance)
+        val mockDbInstance = mock<SensorDatabase>()
+        val mockDao = mock<SensorDao>()
+        whenever(mockDbInstance.sensorDao()).thenReturn(mockDao)
+        SensorDatabase.setTestInstance(mockDbInstance)
 
-            val viewModel = MainViewModel(application)
+        val viewModel = MainViewModel(application)
 
-            // Check initial value from prefs
-            assertEquals("old_mac", viewModel.lastMac.value)
+        // Check initial value from prefs
+        assertEquals("old_mac", viewModel.lastMac.value)
 
-            // Update to new mac
-            viewModel.updateLastMac("00:11:22:33:44:55")
+        // Update to new mac
+        viewModel.updateLastMac("00:11:22:33:44:55")
 
-            // Verify stateflow is updated
-            assertEquals("00:11:22:33:44:55", viewModel.lastMac.value)
+        // Verify stateflow is updated
+        assertEquals("00:11:22:33:44:55", viewModel.lastMac.value)
 
-            // Verify that prefs.lastMac was updated
-            verify(editor).putString("last_mac", "00:11:22:33:44:55")
-            verify(editor).apply()
+        // Verify that prefs.lastMac was updated
+        verify(editor).putString("last_mac", "00:11:22:33:44:55")
+        verify(editor).apply()
 
-            // Test setting the same mac does not update prefs again
-            reset(editor)
-            whenever(editor.putString(anyString(), anyString())).thenReturn(editor)
-            viewModel.updateLastMac("00:11:22:33:44:55")
-            verify(editor, never()).putString(anyString(), anyString())
-        }
+        // Test setting the same mac does not update prefs again
+        reset(editor)
+        whenever(editor.putString(anyString(), anyString())).thenReturn(editor)
+        viewModel.updateLastMac("00:11:22:33:44:55")
+        verify(editor, never()).putString(anyString(), anyString())
     }
 
     @Test
@@ -94,24 +93,22 @@ class MainViewModelTest {
         whenever(editor.putBoolean(anyString(), anyBoolean())).thenReturn(editor)
         whenever(editor.putString(anyString(), anyString())).thenReturn(editor)
 
-        mockStatic(SensorDatabase::class.java).use { mockedDb ->
-            val mockDbInstance = mock<SensorDatabase>()
-            val mockDao = mock<SensorDao>()
-            whenever(mockDbInstance.sensorDao()).thenReturn(mockDao)
-            mockedDb.`when`<SensorDatabase> { SensorDatabase.getDatabase(context) }.thenReturn(mockDbInstance)
+        val mockDbInstance = mock<SensorDatabase>()
+        val mockDao = mock<SensorDao>()
+        whenever(mockDbInstance.sensorDao()).thenReturn(mockDao)
+        SensorDatabase.setTestInstance(mockDbInstance)
 
-            val viewModel = MainViewModel(application)
+        val viewModel = MainViewModel(application)
 
-            assertFalse(viewModel.isDemoMode.value)
+        assertFalse(viewModel.isDemoMode.value)
 
-            viewModel.enableDemoMode()
-            assertTrue(viewModel.isDemoMode.value)
-            verify(editor).putBoolean("has_completed_onboarding", true)
+        viewModel.enableDemoMode()
+        assertTrue(viewModel.isDemoMode.value)
+        verify(editor).putBoolean("has_completed_onboarding", true)
 
-            viewModel.exitDemoMode()
-            assertFalse(viewModel.isDemoMode.value)
-            verify(editor).putBoolean("has_completed_onboarding", false)
-        }
+        viewModel.exitDemoMode()
+        assertFalse(viewModel.isDemoMode.value)
+        verify(editor).putBoolean("has_completed_onboarding", false)
     }
 
     @Test
@@ -129,20 +126,18 @@ class MainViewModelTest {
         whenever(editor.putBoolean(anyString(), anyBoolean())).thenReturn(editor)
         whenever(editor.putString(anyString(), anyString())).thenReturn(editor)
 
-        mockStatic(SensorDatabase::class.java).use { mockedDb ->
-            val mockDbInstance = mock<SensorDatabase>()
-            val mockDao = mock<SensorDao>()
-            whenever(mockDbInstance.sensorDao()).thenReturn(mockDao)
-            mockedDb.`when`<SensorDatabase> { SensorDatabase.getDatabase(context) }.thenReturn(mockDbInstance)
+        val mockDbInstance = mock<SensorDatabase>()
+        val mockDao = mock<SensorDao>()
+        whenever(mockDbInstance.sensorDao()).thenReturn(mockDao)
+        SensorDatabase.setTestInstance(mockDbInstance)
 
-            val viewModel = MainViewModel(application)
+        val viewModel = MainViewModel(application)
 
-            viewModel.selectDeviceAndCompleteOnboarding("11:22:33:44:55:66", "Living Room")
+        viewModel.selectDeviceAndCompleteOnboarding("11:22:33:44:55:66", "Living Room")
 
-            assertEquals("11:22:33:44:55:66", viewModel.lastMac.value)
-            verify(editor).putString("name_11:22:33:44:55:66", "Living Room")
-            verify(editor).putString("last_mac", "11:22:33:44:55:66")
-            verify(editor).putBoolean("has_completed_onboarding", true)
-        }
+        assertEquals("11:22:33:44:55:66", viewModel.lastMac.value)
+        verify(editor).putString("name_11:22:33:44:55:66", "Living Room")
+        verify(editor).putString("last_mac", "11:22:33:44:55:66")
+        verify(editor).putBoolean("has_completed_onboarding", true)
     }
 }
