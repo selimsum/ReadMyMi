@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
 import com.example.readmymi.data.SensorDatabase
+import com.example.readmymi.data.SensorDao
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.setMain
@@ -51,6 +52,8 @@ class MainViewModelTest {
 
         mockStatic(SensorDatabase::class.java).use { mockedDb ->
             val mockDbInstance = mock<SensorDatabase>()
+            val mockDao = mock<SensorDao>()
+            whenever(mockDbInstance.sensorDao()).thenReturn(mockDao)
             mockedDb.`when`<SensorDatabase> { SensorDatabase.getDatabase(context) }.thenReturn(mockDbInstance)
 
             val viewModel = MainViewModel(application)
@@ -93,6 +96,8 @@ class MainViewModelTest {
 
         mockStatic(SensorDatabase::class.java).use { mockedDb ->
             val mockDbInstance = mock<SensorDatabase>()
+            val mockDao = mock<SensorDao>()
+            whenever(mockDbInstance.sensorDao()).thenReturn(mockDao)
             mockedDb.`when`<SensorDatabase> { SensorDatabase.getDatabase(context) }.thenReturn(mockDbInstance)
 
             val viewModel = MainViewModel(application)
@@ -126,6 +131,8 @@ class MainViewModelTest {
 
         mockStatic(SensorDatabase::class.java).use { mockedDb ->
             val mockDbInstance = mock<SensorDatabase>()
+            val mockDao = mock<SensorDao>()
+            whenever(mockDbInstance.sensorDao()).thenReturn(mockDao)
             mockedDb.`when`<SensorDatabase> { SensorDatabase.getDatabase(context) }.thenReturn(mockDbInstance)
 
             val viewModel = MainViewModel(application)

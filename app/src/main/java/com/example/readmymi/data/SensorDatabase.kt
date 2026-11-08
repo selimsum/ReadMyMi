@@ -42,6 +42,7 @@ abstract class SensorDatabase : RoomDatabase() {
             db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_sensor_data_macAddress_timestamp ON sensor_data(macAddress, timestamp)")
         }
 
+        @JvmStatic
         fun getDatabase(context: Context): SensorDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
