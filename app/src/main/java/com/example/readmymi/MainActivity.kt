@@ -56,6 +56,7 @@ import androidx.core.content.ContextCompat
 import com.example.readmymi.ui.AboutScreen
 import com.example.readmymi.ui.SettingsScreen
 import com.example.readmymi.ui.DashboardScreen
+import com.example.readmymi.ui.onboarding.OnboardingScreen
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -80,10 +81,12 @@ fun MainScreen(viewModel: MainViewModel) {
     val lastMac by viewModel.lastMac.collectAsState()
     val isRunning by viewModel.isServiceRunning.collectAsState()
     val sensorData by viewModel.sensorData.collectAsState()
+    val isDemoMode by viewModel.isDemoMode.collectAsState()
     
     var showSettings by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
     var isDownloading by remember { mutableStateOf(false) }
+    var isOnboardingActive by remember { mutableStateOf(!prefs.hasCompletedOnboarding) }
 
     // BLUETOOTH_SCAN is declared neverForLocation in the manifest, so no location
     // permission is needed on Android 12+ (the app's minimum).
@@ -112,20 +115,35 @@ fun MainScreen(viewModel: MainViewModel) {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             database.sensorDao().deleteImplausibleRecords()
         }
-        val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
-        if (bluetoothAdapter == null) {
-            Toast.makeText(context, "Bluetooth is not supported on this device.", Toast.LENGTH_LONG).show()
-        } else if (!bluetoothAdapter.isEnabled) {
-            Toast.makeText(context, "Please enable Bluetooth to scan for sensors.", Toast.LENGTH_LONG).show()
-        }
 
-        val essentialPermissions = permissions.filter { it != Manifest.permission.POST_NOTIFICATIONS }
-        val essentialGranted = essentialPermissions.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
-        if (essentialGranted) {
-            viewModel.startService()
-        } else {
-            launcher.launch(permissions.toTypedArray())
+        // Only prompt on launch if onboarding is already completed; first-run
+        // onboarding handles permission primers educationally.
+        if (prefs.hasCompletedOnboarding) {
+            val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+            if (bluetoothAdapter == null) {
+                Toast.makeText(context, "Bluetooth is not supported on this device.", Toast.LENGTH_LONG).show()
+            } else if (!bluetoothAdapter.isEnabled) {
+                Toast.makeText(context, "Please enable Bluetooth to scan for sensors.", Toast.LENGTH_LONG).show()
+            }
+
+            val essentialPermissions = permissions.filter { it != Manifest.permission.POST_NOTIFICATIONS }
+            val essentialGranted = essentialPermissions.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
+            if (essentialGranted) {
+                viewModel.startService()
+            } else {
+                launcher.launch(permissions.toTypedArray())
+            }
         }
+    }
+
+    if (isOnboardingActive) {
+        OnboardingScreen(
+            viewModel = viewModel,
+            onComplete = {
+                isOnboardingActive = false
+            }
+        )
+        return
     }
 
     if (showAbout) {
@@ -215,6 +233,11 @@ fun MainScreen(viewModel: MainViewModel) {
                         viewModel.clearSelection()
                         viewModel.restartService()
                     },
+                    onRunSetupWizard = {
+                        viewModel.resetOnboarding()
+                        isOnboardingActive = true
+                        showSettings = false
+                    },
                     onBack = { showSettings = false }
                 )
             } else {
@@ -224,8 +247,18 @@ fun MainScreen(viewModel: MainViewModel) {
                     database = database,
                     isServiceRunning = isRunning,
                     isDownloading = isDownloading,
+                    isDemoMode = isDemoMode,
+                    demoHistoryData = viewModel.demoHistoryData,
                     onRefresh = { viewModel.restartService() },
+                    onExitDemo = {
+                        viewModel.exitDemoMode()
+                        isOnboardingActive = true
+                    },
                     onDownloadHistory = { records: Int ->
+                        if (isDemoMode) {
+                            Toast.makeText(context, "History download is disabled in Demo Mode.", Toast.LENGTH_SHORT).show()
+                            return@DashboardScreen
+                        }
                         // Rotation-safe: the work runs in the ViewModel scope.
                         isDownloading = true
                         viewModel.downloadHistory(records) { ok, message ->

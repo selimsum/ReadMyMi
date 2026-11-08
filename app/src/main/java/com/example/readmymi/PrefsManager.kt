@@ -12,6 +12,10 @@ class PrefsManager(context: Context) {
         get() = prefs.getString("last_mac", "") ?: ""
         set(value) = prefs.edit().putString("last_mac", value).apply()
 
+    var hasCompletedOnboarding: Boolean
+        get() = prefs.getBoolean("has_completed_onboarding", lastMac.isNotEmpty())
+        set(value) = prefs.edit().putBoolean("has_completed_onboarding", value).apply()
+
     var scanIntervalSeconds: Int
         get() = prefs.getInt("scan_interval", 300)
         set(value) = prefs.edit().putInt("scan_interval", value).apply()

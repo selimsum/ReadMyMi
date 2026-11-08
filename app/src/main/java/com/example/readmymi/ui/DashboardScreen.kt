@@ -15,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.currentCoroutineContext
@@ -26,6 +28,7 @@ import com.example.readmymi.PercentFormatter
 import com.example.readmymi.PrefsManager
 import com.example.readmymi.SensorData
 import com.example.readmymi.data.SensorDatabase
+import com.example.readmymi.data.SensorEntity
 import java.util.*
 import java.time.format.DateTimeFormatter
 import java.time.Instant
@@ -46,8 +49,11 @@ fun DashboardScreen(
     database: SensorDatabase,
     isServiceRunning: Boolean,
     isDownloading: Boolean,
+    isDemoMode: Boolean = false,
+    demoHistoryData: List<SensorEntity> = emptyList(),
     onRefresh: () -> Unit,
-    onDownloadHistory: (Int) -> Unit
+    onDownloadHistory: (Int) -> Unit,
+    onExitDemo: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     var isRefreshing by remember { mutableStateOf(false) }
@@ -56,13 +62,28 @@ fun DashboardScreen(
     
     if (sensorData == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.padding(24.dp)
+            ) {
                 CircularProgressIndicator(modifier = Modifier.size(48.dp))
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Scanning for sensors...", style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    text = "Connecting to sensor...",
+                    style = MaterialTheme.typography.headlineSmall,
+                    textAlign = TextAlign.Center
+                )
                 if (serviceStatus.isNotBlank() && serviceStatus != "Initializing...") {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(serviceStatus, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        text = serviceStatus,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                OutlinedButton(onClick = onRefresh) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Rescan")
                 }
             }
         }
@@ -87,9 +108,70 @@ fun DashboardScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if (isDemoMode) {
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Preview,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                                Column {
+                                    Text(
+                                        text = "In-Memory Demo Sensor",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                                    )
+                                    Text(
+                                        text = "No records written to local database",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                                    )
+                                }
+                            }
+                            Button(
+                                onClick = onExitDemo,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("Pair Sensor", fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            }
+
             item { SensorMainCard(sensorData, prefs, isServiceRunning, serviceStatus) }
-            item { HistoryChartCard(sensorData.macAddress, database) }
-            item { HistoryActions(isDownloading, onDownloadHistory) }
+            item {
+                HistoryChartCard(
+                    macAddress = sensorData.macAddress,
+                    database = database,
+                    customHistory = if (isDemoMode) demoHistoryData else null
+                )
+            }
+            if (!isDemoMode) {
+                item { HistoryActions(isDownloading, onDownloadHistory) }
+            }
         }
     }
 }
@@ -239,7 +321,11 @@ fun StatusItem(icon: androidx.compose.ui.graphics.vector.ImageVector, value: Str
 }
 
 @Composable
-fun HistoryChartCard(macAddress: String, database: SensorDatabase) {
+fun HistoryChartCard(
+    macAddress: String,
+    database: SensorDatabase,
+    customHistory: List<SensorEntity>? = null
+) {
     val context = LocalContext.current
     val prefs = remember { PrefsManager(context) }
     val tempUnit = prefs.tempUnit
@@ -257,7 +343,14 @@ fun HistoryChartCard(macAddress: String, database: SensorDatabase) {
     }
     val (startTime, _) = getTimeFilterBounds(timeFilter, endTime)
     
-    val historyData by database.sensorDao().getHistory(macAddress, startTime, endTime).collectAsState(initial = emptyList())
+    val dbHistory by database.sensorDao().getHistory(macAddress, startTime, endTime).collectAsState(initial = emptyList())
+    val historyData = remember(customHistory, dbHistory, startTime, endTime) {
+        if (customHistory != null) {
+            customHistory.filter { it.timestamp in startTime..endTime }
+        } else {
+            dbHistory
+        }
+    }
     
     Card(
         modifier = Modifier.fillMaxWidth(),

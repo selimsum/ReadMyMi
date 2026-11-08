@@ -45,6 +45,7 @@ fun SettingsScreen(
     onStopService: () -> Unit,
     onShowAbout: () -> Unit,
     onClearLastMac: () -> Unit,
+    onRunSetupWizard: () -> Unit = onClearLastMac,
     onBack: () -> Unit
 ) {
     val liveStatus by SensorForegroundService.serviceStatus.collectAsState()
@@ -78,7 +79,8 @@ fun SettingsScreen(
                 DeviceCard(
                     prefs = prefs,
                     lastMac = lastMac,
-                    onClearLastMac = onClearLastMac
+                    onClearLastMac = onClearLastMac,
+                    onRunSetupWizard = onRunSetupWizard
                 )
             }
             item { ScanSettingsCard(prefs) }

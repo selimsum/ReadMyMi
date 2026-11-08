@@ -9,6 +9,7 @@ import com.example.readmymi.data.SensorDatabase
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import com.example.readmymi.data.SensorEntity
+import com.example.readmymi.data.DemoDataProvider
 
 private fun SensorEntity.toSensorData() = SensorData(
     macAddress = macAddress,
@@ -35,28 +36,69 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val liveData = SensorForegroundService.liveSensorData
 
-    val sensorData = combine(liveData, offlineData) { live, offline ->
-        val selected = _lastMac.value
-        when {
-            // No device selected yet: show whatever arrives (first-run case).
-            selected.isEmpty() -> live ?: offline?.toSensorData()
-            // Respect the explicit selection: only live packets for the selected
-            // device drive the dashboard; other sensors still persist via service.
-            live != null && live.macAddress == selected -> live
-            else -> offline?.toSensorData()
+    private val _isDemoMode = MutableStateFlow(false)
+    val isDemoMode = _isDemoMode.asStateFlow()
+    val demoHistoryData: List<SensorEntity> by lazy { DemoDataProvider.generate24HourHistory() }
+
+    val discoveredSensors: StateFlow<List<SensorData>> = SensorForegroundService.discoveredDevices
+        .map { it.values.toList() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val sensorData = _isDemoMode.flatMapLatest { isDemo ->
+        if (isDemo) {
+            DemoDataProvider.liveDemoSensorFlow()
+        } else {
+            combine(liveData, offlineData) { live, offline ->
+                val selected = _lastMac.value
+                when {
+                    selected.isEmpty() -> live ?: offline?.toSensorData()
+                    live != null && live.macAddress == selected -> live
+                    else -> offline?.toSensorData()
+                }
+            }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     init {
-        // Adopt the first-seen device exactly once (empty -> first MAC). Never
-        // auto-switch after that: selection is explicit via updateLastMac/clear.
+        // Adopt the first-seen device exactly once (empty -> first MAC) only
+        // after onboarding is completed. Onboarding uses explicit selection.
         viewModelScope.launch {
             liveData.collect { live ->
-                if (live != null && _lastMac.value.isEmpty()) {
+                if (live != null && _lastMac.value.isEmpty() && prefs.hasCompletedOnboarding && !_isDemoMode.value) {
                     updateLastMac(live.macAddress)
                 }
             }
         }
+    }
+
+    fun selectDeviceAndCompleteOnboarding(mac: String, friendlyName: String = "") {
+        if (friendlyName.isNotBlank()) {
+            prefs.setDeviceName(mac, friendlyName.trim())
+        }
+        updateLastMac(mac)
+        prefs.hasCompletedOnboarding = true
+        _isDemoMode.value = false
+        startService()
+    }
+
+    fun enableDemoMode() {
+        _isDemoMode.value = true
+        prefs.hasCompletedOnboarding = true
+    }
+
+    fun exitDemoMode() {
+        _isDemoMode.value = false
+        prefs.hasCompletedOnboarding = false
+        clearSelection()
+        restartService()
+    }
+
+    fun resetOnboarding() {
+        _isDemoMode.value = false
+        prefs.hasCompletedOnboarding = false
+        clearSelection()
+        restartService()
     }
 
     fun updateLastMac(mac: String) {

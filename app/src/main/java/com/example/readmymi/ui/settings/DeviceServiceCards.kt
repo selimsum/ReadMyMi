@@ -46,7 +46,8 @@ import java.util.Locale
 fun DeviceCard(
     prefs: PrefsManager,
     lastMac: String,
-    onClearLastMac: () -> Unit
+    onClearLastMac: () -> Unit,
+    onRunSetupWizard: () -> Unit = onClearLastMac
 ) {
     var showDeviceNameDialog by remember { mutableStateOf(false) }
     var newDeviceName by remember { mutableStateOf("") }
@@ -106,7 +107,17 @@ fun DeviceCard(
                 }
             }
         } else {
-            Text("No device connected", style = MaterialTheme.typography.bodyLarge)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("No device connected", style = MaterialTheme.typography.bodyMedium)
+                Button(
+                    onClick = onRunSetupWizard,
+                    modifier = Modifier.fillMaxWidth().height(44.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Pair New Sensor")
+                }
+            }
         }
     }
 

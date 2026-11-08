@@ -39,6 +39,7 @@ class SensorForegroundService : Service() {
         var isServiceRunning = false
         val isServiceRunningFlow = kotlinx.coroutines.flow.MutableStateFlow(false)
         val liveSensorData = kotlinx.coroutines.flow.MutableStateFlow<SensorData?>(null)
+        val discoveredDevices = kotlinx.coroutines.flow.MutableStateFlow<Map<String, SensorData>>(emptyMap())
         val serviceStatus = kotlinx.coroutines.flow.MutableStateFlow("Initializing...")
 
         fun findGapInTimestamps(recentTimestamps: List<Long>, incomingTimestamp: Long): Pair<Long, Long>? {
@@ -117,6 +118,9 @@ class SensorForegroundService : Service() {
             stopSelf()
             return START_NOT_STICKY
         } else if (intent?.action == "START_SCAN" || intent?.action == null) {
+            if (prefs.lastMac.isEmpty()) {
+                discoveredDevices.value = emptyMap()
+            }
             if (!isServiceRunning) {
                 isServiceRunning = true
                 isServiceRunningFlow.value = true
@@ -436,6 +440,7 @@ class SensorForegroundService : Service() {
 
     private fun handleSensorData(data: SensorData) {
         liveSensorData.value = data
+        discoveredDevices.value = discoveredDevices.value + (data.macAddress to data)
         latestReadings[data.macAddress] = data
         updateLastPublish(data.macAddress)
         

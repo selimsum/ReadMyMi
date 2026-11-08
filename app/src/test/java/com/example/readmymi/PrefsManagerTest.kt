@@ -153,4 +153,28 @@ class PrefsManagerTest {
         verify(editor).putBoolean("alert_active_$mac:temp_high", true)
         verify(editor).commit()
     }
+
+    @Test
+    fun `hasCompletedOnboarding defaults to true if lastMac is present`() {
+        whenever(sharedPreferences.getString(eq("last_mac"), any())).thenReturn("AA:BB:CC:DD:EE:FF")
+        whenever(sharedPreferences.getBoolean(eq("has_completed_onboarding"), eq(true))).thenReturn(true)
+
+        assertEquals(true, prefsManager.hasCompletedOnboarding)
+    }
+
+    @Test
+    fun `hasCompletedOnboarding defaults to false if lastMac is empty`() {
+        whenever(sharedPreferences.getString(eq("last_mac"), any())).thenReturn("")
+        whenever(sharedPreferences.getBoolean(eq("has_completed_onboarding"), eq(false))).thenReturn(false)
+
+        assertEquals(false, prefsManager.hasCompletedOnboarding)
+    }
+
+    @Test
+    fun `hasCompletedOnboarding set stores boolean correctly`() {
+        prefsManager.hasCompletedOnboarding = true
+
+        verify(editor).putBoolean("has_completed_onboarding", true)
+        verify(editor).apply()
+    }
 }
