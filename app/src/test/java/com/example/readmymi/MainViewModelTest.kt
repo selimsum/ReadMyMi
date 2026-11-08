@@ -7,6 +7,7 @@ import com.example.readmymi.data.SensorDatabase
 import com.example.readmymi.data.SensorDao
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.test.resetMain
 import org.junit.After
@@ -54,6 +55,7 @@ class MainViewModelTest {
         val mockDbInstance = mock<SensorDatabase>()
         val mockDao = mock<SensorDao>()
         whenever(mockDbInstance.sensorDao()).thenReturn(mockDao)
+        whenever(mockDao.getLatest(anyString())).thenReturn(emptyFlow())
         SensorDatabase.setTestInstance(mockDbInstance)
 
         val viewModel = MainViewModel(application)
@@ -96,6 +98,7 @@ class MainViewModelTest {
         val mockDbInstance = mock<SensorDatabase>()
         val mockDao = mock<SensorDao>()
         whenever(mockDbInstance.sensorDao()).thenReturn(mockDao)
+        whenever(mockDao.getLatest(anyString())).thenReturn(emptyFlow())
         SensorDatabase.setTestInstance(mockDbInstance)
 
         val viewModel = MainViewModel(application)
@@ -129,6 +132,7 @@ class MainViewModelTest {
         val mockDbInstance = mock<SensorDatabase>()
         val mockDao = mock<SensorDao>()
         whenever(mockDbInstance.sensorDao()).thenReturn(mockDao)
+        whenever(mockDao.getLatest(anyString())).thenReturn(emptyFlow())
         SensorDatabase.setTestInstance(mockDbInstance)
 
         val viewModel = MainViewModel(application)
