@@ -1,0 +1,220 @@
+name: Publish Release
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      force_release:
+        description: 'Force release even if tag or release already exists'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check-version:
+    name: Check Version Bump
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.version_check.outputs.should_release }}
+      version: ${{ steps.version_check.outputs.version }}
+      tag: ${{ steps.version_check.outputs.tag }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect Version and Check if Bumped
+        id: version_check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+
+          # 1. Determine tag and version
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG="${{ github.ref_name }}"
+            VERSION="${TAG#v}"
+            IS_TAG_PUSH=true
+          else
+            IS_TAG_PUSH=false
+            VERSION=$(grep -E '^\s*versionName\s+' app/build.gradle | head -n1 | sed -E 's/.*versionName[[:space:]=]*["\x27]([^"\x27]+)["\x27].*/\1/')
+            if [ -z "$VERSION" ]; then
+              echo "::error::Could not extract versionName from app/build.gradle"
+              exit 1
+            fi
+            TAG="v${VERSION}"
+          fi
+
+          echo "Current project version: $VERSION (tag: $TAG)"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+          # 2. Check if release already exists on GitHub
+          RELEASE_EXISTS=false
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            RELEASE_EXISTS=true
+          fi
+
+          if [ "$RELEASE_EXISTS" = "true" ] && [ "${{ github.event.inputs.force_release }}" != "true" ]; then
+            echo "GitHub release $TAG already exists. Skipping release."
+            echo "should_release=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # 3. Explicit triggers: tag push or manual workflow dispatch
+          if [ "$IS_TAG_PUSH" = "true" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Explicit release trigger (tag push or manual workflow dispatch)."
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # 4. For branch push: check if versionName was bumped in pushed commits
+          BEFORE="${{ github.event.before }}"
+          VERSION_BUMPED=false
+
+          if [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            PREV_VERSION=$(git show "${BEFORE}:app/build.gradle" 2>/dev/null | grep -E '^\s*versionName\s+' | head -n1 | sed -E 's/.*versionName[[:space:]=]*["\x27]([^"\x27]+)["\x27].*/\1/' || true)
+            echo "Previous commit versionName: '$PREV_VERSION'"
+            if [ -n "$PREV_VERSION" ] && [ "$PREV_VERSION" != "$VERSION" ]; then
+              echo "Version bump detected: $PREV_VERSION -> $VERSION"
+              VERSION_BUMPED=true
+            fi
+          else
+            # New branch or missing before commit: check if tag exists
+            git fetch --tags --force >/dev/null 2>&1 || true
+            if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+              VERSION_BUMPED=true
+            fi
+          fi
+
+          if [ "$VERSION_BUMPED" = "true" ]; then
+            echo "Version bump confirmed! Triggering release for $TAG."
+            echo "should_release=true" >> $GITHUB_OUTPUT
+          else
+            echo "No version bump detected in this push (versionName is still $VERSION). Skipping release."
+            echo "should_release=false" >> $GITHUB_OUTPUT
+          fi
+
+  publish:
+    name: Build & Publish Release
+    needs: check-version
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run unit tests
+        run: |
+          ./gradlew testDebugUnitTest || {
+            echo "================ TEST FAILURES ================"
+            for f in $(find app/build/test-results -name "*.xml"); do
+              echo "--- $f ---"
+              cat "$f"
+            done
+            exit 1
+          }
+
+      - name: Setup Keystore (if secret is configured)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "Configuring release keystore from secrets..."
+            echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+            echo "KEYSTORE_FILE=$RUNNER_TEMP/release.keystore" >> $GITHUB_ENV
+          else
+            echo "No custom keystore secret configured. Using debug certificate for release build."
+          fi
+
+      - name: Build APKs (Release & Debug)
+        env:
+          KEYSTORE_FILE: ${{ env.KEYSTORE_FILE }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          ./gradlew assembleRelease assembleDebug --stacktrace
+
+      - name: Prepare Release Artifacts
+        env:
+          TAG: ${{ needs.check-version.outputs.tag }}
+        run: |
+          mkdir -p dist
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk "dist/ReadMyMi-${TAG}.apk"
+          elif [ -f app/build/outputs/apk/release/app-release-unsigned.apk ]; then
+            cp app/build/outputs/apk/release/app-release-unsigned.apk "dist/ReadMyMi-${TAG}-unsigned.apk"
+          fi
+
+          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk "dist/ReadMyMi-${TAG}-debug.apk"
+          fi
+
+          cd dist
+          sha256sum *.apk > sha256sums.txt
+          echo "==> Prepared release artifacts in dist/:"
+          ls -la
+          cat sha256sums.txt
+          cd ..
+
+      - name: Publish GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.check-version.outputs.tag }}
+          VERSION: ${{ needs.check-version.outputs.version }}
+        run: |
+          echo "Publishing release for $TAG..."
+
+          NOTES_FLAG="--generate-notes"
+          if [ -f "RELEASE_NOTES.md" ]; then
+            NOTES_FLAG="--notes-file RELEASE_NOTES.md"
+          fi
+
+          # If release already exists (forced re-run), update assets
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists. Uploading updated assets..."
+            gh release upload "$TAG" --clobber dist/*
+            exit 0
+          fi
+
+          # Fetch remote tags to check if git tag already exists
+          git fetch --tags --force >/dev/null 2>&1 || true
+
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG exists. Creating release associated with tag..."
+            gh release create "$TAG" dist/* \
+              --title "ReadMyMi $TAG" \
+              $NOTES_FLAG
+          else
+            echo "Creating tag $TAG and publishing release..."
+            gh release create "$TAG" dist/* \
+              --title "ReadMyMi $TAG" \
+              $NOTES_FLAG \
+              --target "$GITHUB_SHA"
+          fi

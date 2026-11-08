@@ -23,7 +23,7 @@ try {
     }
 
     if ($Release) {
-        Write-Host "==> Building release APK (unsigned)..."
+        Write-Host "==> Building release APK..."
         & $gradlew :app:assembleRelease --console=plain
         if ($LASTEXITCODE -ne 0) { Write-Error "Release build failed."; exit 1 }
         $apks = @(Get-ChildItem -Path "$root\app\build\outputs\apk\release" -Filter *.apk -File)

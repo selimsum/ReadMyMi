@@ -104,6 +104,49 @@ CI runs the unit tests and a debug build on every push and pull request.
 
 ---
 
+## 📦 Releases & Versioning
+
+ReadMyMi publishes a new GitHub Release automatically whenever the version is bumped and pushed to the `main` branch.
+
+### How it works:
+1. When `versionName` in `app/build.gradle` is updated (e.g., from `1.7.0` to `1.7.1`) and pushed to `main`, the GitHub Actions release workflow:
+   - Verifies all unit tests pass.
+   - Compiles both release and debug APKs (`ReadMyMi-v<version>.apk`, `ReadMyMi-v<version>-debug.apk`).
+   - Computes SHA256 checksums (`sha256sums.txt`).
+   - Automatically creates the Git tag `v<version>`.
+   - Publishes the GitHub Release with automated changelog release notes and attaches the APKs.
+2. Pushing a Git tag directly (`git push origin v<version>`) or manually triggering the **Publish Release** workflow in the Actions tab also triggers a release.
+
+### Bumping the version:
+
+You can bump the version and trigger a release with one command:
+
+**On Windows (PowerShell):**
+```powershell
+# Bump patch version (e.g. 1.7.0 -> 1.7.1), commit, and push:
+.\bump-version.ps1 -Patch -Commit -Push
+
+# Or bump minor (e.g. 1.7.0 -> 1.8.0):
+.\bump-version.ps1 -Minor -Commit -Push
+
+# Or set an explicit version:
+.\bump-version.ps1 1.7.1 -Commit -Push
+```
+
+**On Linux / macOS (Bash):**
+```bash
+# Bump patch version, commit, and push:
+./bump-version.sh --patch --push
+
+# Or bump minor:
+./bump-version.sh --minor --push
+
+# Or set an explicit version:
+./bump-version.sh 1.7.1 --push
+```
+
+---
+
 ## 🔐 Permissions & Privacy
 
 ReadMyMi requests only what BLE scanning actually needs:
