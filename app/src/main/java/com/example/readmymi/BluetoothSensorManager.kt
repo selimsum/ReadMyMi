@@ -150,25 +150,81 @@ class BluetoothSensorManager(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     private suspend fun downloadHistoryInternal(deviceAddress: String, records: Int = 70, lastDbTimestamp: Long? = null, onLog: (String) -> Unit = {}): List<SensorData> = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        fun log(msg: String) {
+            AppLogger.log("BluetoothSensorManager", msg)
+            onLog(msg)
+        }
+
         gattMutex.withLock {
             isGattBusy = true
             try {
                 val historyList = mutableListOf<SensorData>()
                 val device = bluetoothAdapter?.getRemoteDevice(deviceAddress) ?: return@withLock emptyList()
-                
+
                 var gatt: BluetoothGatt? = null
                 val completion = kotlinx.coroutines.CompletableDeferred<Boolean>()
                 val lastPacketTime = java.util.concurrent.atomic.AtomicLong(0L)
                 val packetsReceived = java.util.concurrent.atomic.AtomicInteger(0)
-                
+
+                fun handleIncomingPacket(g: BluetoothGatt, value: ByteArray) {
+                    lastPacketTime.set(System.currentTimeMillis())
+                    val count = packetsReceived.incrementAndGet()
+                    if (count == 1 || count % 50 == 0) {
+                        log("History stream packet #$count received (${value.size} bytes)")
+                    }
+
+                    if (value.size >= 3 && value[0] == 0x35.toByte() && value[1] == 0.toByte() && value[2] == 0.toByte()) {
+                        log("End-of-history marker received. Total records: ${historyList.size}")
+                        completion.complete(true)
+                        g.disconnect()
+                        return
+                    }
+
+                    if (value.size >= 13 && value[0] == 0x35.toByte()) {
+                        val buffer = java.nio.ByteBuffer.wrap(value).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                        val time = (buffer.getInt(3).toLong() and 0xFFFFFFFFL) * 1000L
+                        val temp = buffer.getShort(7) / 100.0
+                        val hum = buffer.getShort(9) / 100.0
+                        val vbat = buffer.getShort(11)
+                        val batPct = SensorParser.calculateBatteryPercentage(vbat.toInt())
+
+                        val parsedTemp = Math.round(temp * 100) / 100.0
+                        val parsedHum = Math.round(hum * 100) / 100.0
+                        val isDummyRecord = (Math.abs(parsedTemp - 21.12) < 0.05 && Math.abs(parsedHum - 43.0) < 0.5)
+
+                        if (temp in -40.0..80.0 && hum in 0.0..100.0 && !(temp == 0.0 && hum == 0.0) && !isDummyRecord) {
+                            historyList.add(SensorData(
+                                macAddress = g.device.address,
+                                deviceName = g.device.name ?: "",
+                                temperature = parsedTemp,
+                                humidity = parsedHum,
+                                battery = batPct,
+                                timestamp = time
+                            ))
+                        }
+                    }
+                }
+
                 val gattCallback = object : BluetoothGattCallback() {
                     private val writeStep = java.util.concurrent.atomic.AtomicInteger(0)
 
                     override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
+                        log("Connection state change: status=$status, newState=$newState")
+                        if (status != BluetoothGatt.GATT_SUCCESS) {
+                            log("Connection state error status=$status, newState=$newState")
+                            if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                                if (!completion.isCompleted) {
+                                    completion.complete(historyList.isNotEmpty())
+                                }
+                                return
+                            }
+                        }
                         if (newState == BluetoothProfile.STATE_CONNECTED) {
+                            log("Connected, requesting high priority and discovering services...")
                             g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
                             g.discoverServices()
                         } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                            log("Disconnected. Total records collected: ${historyList.size}")
                             if (!completion.isCompleted) {
                                 completion.complete(historyList.isNotEmpty())
                             }
@@ -176,103 +232,148 @@ class BluetoothSensorManager(private val context: Context) {
                     }
 
                     override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
-                        if (status == BluetoothGatt.GATT_SUCCESS) {
-                            val service = g.getService(UUID.fromString(SERVICE_UUID))
-                            val char = service?.getCharacteristic(UUID.fromString(CHAR_UUID))
-                            if (char != null) {
-                                g.setCharacteristicNotification(char, true)
-                                val desc = char.getDescriptor(UUID.fromString(DESC_UUID))
-                                if (desc != null) {
-                                    desc.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                                    g.writeDescriptor(desc)
-                                } else {
-                                    AppLogger.log("BluetoothSensorManager", "Notification descriptor not found")
-                                    g.disconnect()
-                                }
-                            } else {
-                                g.disconnect()
-                            }
-                        } else {
-                            g.disconnect()
-                        }
-                    }
-                     
-                    override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor?, status: Int) {
+                        log("Services discovered: status=$status, count=${g.services.size}")
                         if (status != BluetoothGatt.GATT_SUCCESS) {
-                            AppLogger.log("BluetoothSensorManager", "Descriptor write failed ($status)")
+                            log("Service discovery failed with status $status")
                             completion.complete(false)
                             g.disconnect()
                             return
                         }
-                        val char = g.getService(UUID.fromString(SERVICE_UUID))
-                            ?.getCharacteristic(UUID.fromString(CHAR_UUID)) ?: return
-                        
+
+                        val service = g.getService(UUID.fromString(SERVICE_UUID))
+                            ?: g.services.firstOrNull { it.uuid.toString().contains("1f10", ignoreCase = true) }
+
+                        if (service == null) {
+                            val available = g.services.map { it.uuid.toString().take(8) }.joinToString(",")
+                            log("History service 0x1F10 not found. Discovered services: [$available]")
+                            completion.complete(false)
+                            g.disconnect()
+                            return
+                        }
+
+                        val char = service.getCharacteristic(UUID.fromString(CHAR_UUID))
+                            ?: service.characteristics.firstOrNull { it.uuid.toString().contains("1f1f", ignoreCase = true) }
+
+                        if (char == null) {
+                            log("History characteristic 0x1F1F not found in service ${service.uuid}")
+                            completion.complete(false)
+                            g.disconnect()
+                            return
+                        }
+
+                        val notifyOk = g.setCharacteristicNotification(char, true)
+                        log("setCharacteristicNotification: $notifyOk")
+
+                        val desc = char.getDescriptor(UUID.fromString(DESC_UUID))
+                            ?: char.descriptors.firstOrNull { it.uuid.toString().contains("2902", ignoreCase = true) }
+
+                        if (desc == null) {
+                            log("Notification descriptor 0x2902 not found")
+                            completion.complete(false)
+                            g.disconnect()
+                            return
+                        }
+
+                        val descOk = writeDescriptor(g, desc, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+                        log("writeDescriptor initiated: $descOk")
+                        if (!descOk) {
+                            log("Failed to initiate descriptor write, aborting")
+                            completion.complete(false)
+                            g.disconnect()
+                        }
+                    }
+
+                    override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor?, status: Int) {
+                        log("onDescriptorWrite: status=$status")
+                        if (status != BluetoothGatt.GATT_SUCCESS) {
+                            log("Descriptor write failed ($status)")
+                            completion.complete(false)
+                            g.disconnect()
+                            return
+                        }
+                        val service = g.getService(UUID.fromString(SERVICE_UUID))
+                            ?: g.services.firstOrNull { it.uuid.toString().contains("1f10", ignoreCase = true) }
+                        val char = service?.getCharacteristic(UUID.fromString(CHAR_UUID))
+                            ?: service?.characteristics?.firstOrNull { it.uuid.toString().contains("1f1f", ignoreCase = true) }
+
+                        if (char == null) {
+                            log("Characteristic not found on descriptor write")
+                            completion.complete(false)
+                            g.disconnect()
+                            return
+                        }
+
                         val currentTime = (System.currentTimeMillis() / 1000).toInt()
                         val timeCmd = ByteArray(5).apply {
                             this[0] = 0x23.toByte()
                             System.arraycopy(java.nio.ByteBuffer.allocate(4).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(currentTime).array(), 0, this, 1, 4)
                         }
                         writeStep.set(1)
-                        writeCharacteristic(g, char, timeCmd)
-                     }
+                        val timeOk = writeCharacteristic(g, char, timeCmd)
+                        log("Wrote timeCmd (0x23), initiated=$timeOk")
+                        if (!timeOk) {
+                            writeStep.set(2)
+                            val cmd = byteArrayOf(
+                                0x35.toByte(),
+                                (records and 0xFF).toByte(),
+                                ((records shr 8) and 0xFF).toByte()
+                            )
+                            val histOk = writeCharacteristic(g, char, cmd)
+                            log("Fallback: wrote historyCmd (0x35, $records records), initiated=$histOk")
+                            if (!histOk) {
+                                completion.complete(false)
+                                g.disconnect()
+                            }
+                        }
+                    }
 
                     override fun onCharacteristicWrite(g: BluetoothGatt, char: BluetoothGattCharacteristic?, status: Int) {
-                        if (status == BluetoothGatt.GATT_SUCCESS && writeStep.get() == 1) {
-                             val cmd = ByteArray(5).apply {
-                                this[0] = 0x35.toByte()
-                                this[1] = (records and 0xFF).toByte()
-                                this[2] = ((records shr 8) and 0xFF).toByte()
-                             }
-                             writeStep.set(2)
-                             writeCharacteristic(g, char!!, cmd)
+                        log("onCharacteristicWrite: status=$status, step=${writeStep.get()}")
+                        if (char == null) return
+                        if (writeStep.get() == 1) {
+                            writeStep.set(2)
+                            val cmd = byteArrayOf(
+                                0x35.toByte(),
+                                (records and 0xFF).toByte(),
+                                ((records shr 8) and 0xFF).toByte()
+                            )
+                            val histOk = writeCharacteristic(g, char, cmd)
+                            log("Wrote historyCmd (0x35, $records records), initiated=$histOk")
+                            if (!histOk) {
+                                completion.complete(false)
+                                g.disconnect()
+                            }
                         }
                     }
 
                     override fun onCharacteristicChanged(g: BluetoothGatt, char: BluetoothGattCharacteristic, value: ByteArray) {
-                        lastPacketTime.set(System.currentTimeMillis())
-                        packetsReceived.incrementAndGet()
+                        handleIncomingPacket(g, value)
+                    }
 
-                        if (value.size >= 3 && value[0] == 0x35.toByte() && value[1] == 0.toByte() && value[2] == 0.toByte()) {
-                            completion.complete(true)
-                            g.disconnect()
-                            return
-                        }
-
-                        if (value.size >= 13 && value[0] == 0x35.toByte()) {
-                            val buffer = java.nio.ByteBuffer.wrap(value).order(java.nio.ByteOrder.LITTLE_ENDIAN)
-                            val time = (buffer.getInt(3).toLong() and 0xFFFFFFFFL) * 1000L
-                            val temp = buffer.getShort(7) / 100.0
-                            val hum = buffer.getShort(9) / 100.0
-                            val vbat = buffer.getShort(11)
-                            val batPct = SensorParser.calculateBatteryPercentage(vbat.toInt())
-
-                            val parsedTemp = Math.round(temp * 100) / 100.0
-                            val parsedHum = Math.round(hum * 100) / 100.0
-                            val isDummyRecord = (Math.abs(parsedTemp - 21.12) < 0.05 && Math.abs(parsedHum - 43.0) < 0.5)
-
-                            if (temp in -40.0..80.0 && hum in 0.0..100.0 && !(temp == 0.0 && hum == 0.0) && !isDummyRecord) {
-                                historyList.add(SensorData(
-                                    macAddress = g.device.address,
-                                    deviceName = g.device.name ?: "",
-                                    temperature = parsedTemp,
-                                    humidity = parsedHum,
-                                    battery = batPct,
-                                    timestamp = time
-                                ))
-                            }
+                    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+                    override fun onCharacteristicChanged(g: BluetoothGatt, char: BluetoothGattCharacteristic) {
+                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                            val value = char.value ?: byteArrayOf()
+                            handleIncomingPacket(g, value)
                         }
                     }
                 }
 
                 stopScanning()
+                kotlinx.coroutines.delay(300)
+
                 if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
-                     gatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                         device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
-                     } else {
-                         device.connectGatt(context, false, gattCallback)
-                     }
-                } else return@withLock emptyList()
-                
+                    log("Connecting GATT to $deviceAddress...")
+                    gatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+                    } else {
+                        device.connectGatt(context, false, gattCallback)
+                    }
+                } else {
+                    log("BLUETOOTH_CONNECT permission not granted")
+                    return@withLock emptyList()
+                }
+
                 val maxWaitMs = if (records > 1000) 300_000L else 60_000L
                 val startTime = System.currentTimeMillis()
 
@@ -281,27 +382,27 @@ class BluetoothSensorManager(private val context: Context) {
                         kotlinx.coroutines.delay(500)
                         val now = System.currentTimeMillis()
                         if (now - startTime > maxWaitMs) {
-                            AppLogger.log("BluetoothSensorManager", "Download max timeout reached ($maxWaitMs ms)")
+                            log("Download max timeout reached ($maxWaitMs ms)")
                             break
                         }
                         if (packetsReceived.get() == 0 && (now - startTime) > 15_000L) {
-                            AppLogger.log("BluetoothSensorManager", "Connection or stream start timeout (15s), aborting download")
+                            log("Connection or stream start timeout (15s), aborting download")
                             break
                         }
                         if (packetsReceived.get() > 0 && (now - lastPacketTime.get()) > 8000L) {
-                            AppLogger.log("BluetoothSensorManager", "Stream idle for 8s, completing download with ${historyList.size} records")
+                            log("Stream idle for 8s, completing download with ${historyList.size} records")
                             break
                         }
                     }
                 } finally {
-                     gatt?.disconnect()
-                     gatt?.close()
+                    gatt?.disconnect()
+                    gatt?.close()
                 }
 
                 if (historyList.isEmpty()) {
                     throw Exception("Bluetooth connection lost or timed out before history data was received")
                 }
-                
+
                 return@withLock fixTimestamps(historyList, lastDbTimestamp)
             } finally {
                 isGattBusy = false
@@ -342,18 +443,54 @@ class BluetoothSensorManager(private val context: Context) {
     }
 
     @SuppressLint("MissingPermission")
-    private fun writeCharacteristic(g: BluetoothGatt, char: BluetoothGattCharacteristic, value: ByteArray) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            g.writeCharacteristic(char, value, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+    private fun writeCharacteristic(g: BluetoothGatt, char: BluetoothGattCharacteristic, value: ByteArray): Boolean {
+        val writeType = if (char.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0) {
+            BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
         } else {
-            char.value = value
-            char.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-            g.writeCharacteristic(char)
+            BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+        }
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val res = g.writeCharacteristic(char, value, writeType)
+                res == android.bluetooth.BluetoothStatusCodes.SUCCESS
+            } else {
+                @Suppress("DEPRECATION")
+                char.value = value
+                char.writeType = writeType
+                @Suppress("DEPRECATION")
+                g.writeCharacteristic(char)
+            }
+        } catch (e: Exception) {
+            AppLogger.log("BluetoothSensorManager", "writeCharacteristic exception: ${e.message}")
+            false
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun writeDescriptor(g: BluetoothGatt, desc: BluetoothGattDescriptor, value: ByteArray): Boolean {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val res = g.writeDescriptor(desc, value)
+                res == android.bluetooth.BluetoothStatusCodes.SUCCESS
+            } else {
+                @Suppress("DEPRECATION")
+                desc.value = value
+                @Suppress("DEPRECATION")
+                g.writeDescriptor(desc)
+            }
+        } catch (e: Exception) {
+            AppLogger.log("BluetoothSensorManager", "writeDescriptor exception: ${e.message}")
+            false
         }
     }
 
     @SuppressLint("MissingPermission")
     suspend fun syncTime(deviceAddress: String, onLog: (String) -> Unit = {}): Boolean = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        fun log(msg: String) {
+            AppLogger.log("BluetoothSensorManager", msg)
+            onLog(msg)
+        }
+
         gattMutex.withLock {
             isGattBusy = true
             try {
@@ -362,32 +499,50 @@ class BluetoothSensorManager(private val context: Context) {
                 
                 val gattCallback = object : BluetoothGattCallback() {
                     override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
-                        if (newState == BluetoothProfile.STATE_CONNECTED) g.discoverServices()
-                        else if (newState == BluetoothProfile.STATE_DISCONNECTED && !completion.isCompleted) completion.complete(false)
+                        log("syncTime: onConnectionStateChange status=$status newState=$newState")
+                        if (newState == BluetoothProfile.STATE_CONNECTED) {
+                            g.discoverServices()
+                        } else if (newState == BluetoothProfile.STATE_DISCONNECTED && !completion.isCompleted) {
+                            completion.complete(false)
+                        }
                     }
 
                     override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
+                        log("syncTime: onServicesDiscovered status=$status")
                         if (status == BluetoothGatt.GATT_SUCCESS) {
                             val service = g.getService(UUID.fromString(SERVICE_UUID))
+                                ?: g.services.firstOrNull { it.uuid.toString().contains("1f10", ignoreCase = true) }
                             val char = service?.getCharacteristic(UUID.fromString(CHAR_UUID))
+                                ?: service?.characteristics?.firstOrNull { it.uuid.toString().contains("1f1f", ignoreCase = true) }
+
                             if (char != null) {
                                 val currentTime = (System.currentTimeMillis() / 1000).toInt()
                                 val timeCmd = ByteArray(5).apply {
                                     this[0] = 0x23.toByte()
                                     System.arraycopy(java.nio.ByteBuffer.allocate(4).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(currentTime).array(), 0, this, 1, 4)
                                 }
-                                writeCharacteristic(g, char, timeCmd)
-                            } else completion.complete(false)
-                        } else completion.complete(false)
+                                val ok = writeCharacteristic(g, char, timeCmd)
+                                log("syncTime: writeCharacteristic initiated=$ok")
+                                if (!ok) completion.complete(false)
+                            } else {
+                                log("syncTime: service or characteristic not found")
+                                completion.complete(false)
+                            }
+                        } else {
+                            completion.complete(false)
+                        }
                     }
                     
                     override fun onCharacteristicWrite(g: BluetoothGatt, char: BluetoothGattCharacteristic?, status: Int) {
-                         completion.complete(status == BluetoothGatt.GATT_SUCCESS)
-                         g.disconnect()
+                        log("syncTime: onCharacteristicWrite status=$status")
+                        completion.complete(status == BluetoothGatt.GATT_SUCCESS)
+                        g.disconnect()
                     }
                 }
 
                 stopScanning()
+                kotlinx.coroutines.delay(300)
+
                 if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) return@withLock false
                 
                 val gatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -397,10 +552,11 @@ class BluetoothSensorManager(private val context: Context) {
                 try {
                     kotlinx.coroutines.withTimeout(15000) { completion.await() }
                 } catch (e: TimeoutCancellationException) {
+                    log("syncTime: timeout (15s)")
                     false
                 } finally {
-                    gatt.disconnect()
-                    gatt.close()
+                    gatt?.disconnect()
+                    gatt?.close()
                 }
             } finally {
                 isGattBusy = false

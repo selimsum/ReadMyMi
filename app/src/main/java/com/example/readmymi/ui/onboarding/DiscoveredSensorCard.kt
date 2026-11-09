@@ -152,7 +152,7 @@ fun DiscoveredSensorCard(
                 val seconds = autoAdvanceSecondsRemaining ?: 3
                 Column(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     LinearProgressIndicator(
                         progress = { (seconds / 3f).coerceIn(0f, 1f) },
@@ -173,23 +173,46 @@ fun DiscoveredSensorCard(
                             text = "Auto-connecting in ${seconds}s...",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            softWrap = false
                         )
+                    }
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TextButton(
-                                onClick = onPauseOrRename,
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                            ) {
-                                Text("Pause / Rename", fontSize = 12.sp)
-                            }
-                            Button(
-                                onClick = onSelect,
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text("Connect", fontSize = 12.sp)
-                            }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = onPauseOrRename,
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Rename",
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                        Button(
+                            onClick = onSelect,
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Connect",
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     }
                 }

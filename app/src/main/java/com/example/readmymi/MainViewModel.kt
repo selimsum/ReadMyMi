@@ -130,7 +130,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 val manager = BluetoothSensorManager(context)
                 val latestTs = database.sensorDao().getLatestTimestamp(mac)
-                val history = manager.downloadHistory(mac, records, lastDbTimestamp = latestTs)
+                val history = manager.downloadHistory(mac, records, lastDbTimestamp = latestTs) { msg ->
+                    AppLogger.log("MainViewModel", msg)
+                }
                 if (history.isNotEmpty()) {
                     database.sensorDao().insertAll(history.map {
                         SensorEntity(
