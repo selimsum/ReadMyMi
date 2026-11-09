@@ -56,6 +56,64 @@ class BluetoothSensorManager(private val context: Context) {
         }
         /** Caller-visible ceiling for a full GATT history download (cancellable). */
         const val DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000L
+
+        internal fun fixTimestamps(
+            history: List<SensorData>,
+            lastDbTimestamp: Long? = null,
+            now: Long = System.currentTimeMillis()
+        ): List<SensorData> {
+            if (history.isEmpty()) return history
+
+            val validEpoch = history.filter { it.timestamp in 1577836800000L..(now + 300000L) }.map {
+                if (it.timestamp > now) it.copy(timestamp = now) else it
+            }
+            val wrongRecords = history.filter { it.timestamp < 1577836800000L }
+
+            if (wrongRecords.isEmpty()) {
+                return validEpoch.distinctBy { it.timestamp }.sortedBy { it.timestamp }
+            }
+
+            val modernEpoch = validEpoch.filter { it.timestamp >= now - 7 * 24 * 3600 * 1000L }
+            val olderEpoch = validEpoch.filter { it.timestamp < now - 7 * 24 * 3600 * 1000L }
+
+            val anchor = if (modernEpoch.isNotEmpty()) {
+                (modernEpoch.minOf { it.timestamp } - 60_000L).coerceAtMost(now - 60_000L)
+            } else {
+                now - 60_000L
+            }
+
+            val sessions = mutableListOf<MutableList<SensorData>>()
+            var currentSession = mutableListOf<SensorData>()
+            for (item in wrongRecords) {
+                if (currentSession.isNotEmpty() && item.timestamp < currentSession.last().timestamp) {
+                    sessions.add(currentSession)
+                    currentSession = mutableListOf()
+                }
+                currentSession.add(item)
+            }
+            if (currentSession.isNotEmpty()) {
+                sessions.add(currentSession)
+            }
+
+            var currentAnchor = anchor
+            val shiftedRelative = mutableListOf<SensorData>()
+            for (session in sessions.reversed()) {
+                if (session.isEmpty()) continue
+                val sessionEnd = session.last().timestamp
+                val correction = currentAnchor - sessionEnd
+                val shifted = session.map { it.copy(timestamp = it.timestamp + correction) }
+                shiftedRelative.addAll(0, shifted)
+                currentAnchor = shifted.first().timestamp - 60_000L
+            }
+
+            val firstRelTs = shiftedRelative.firstOrNull()?.timestamp ?: Long.MAX_VALUE
+            val combined = (olderEpoch.filter { it.timestamp < firstRelTs } + shiftedRelative + modernEpoch)
+                .distinctBy { it.timestamp }
+                .filter { it.timestamp in 1577836800000L..now }
+                .sortedBy { it.timestamp }
+
+            return combined
+        }
     }
 
     private val bluetoothManager: BluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -68,7 +126,6 @@ class BluetoothSensorManager(private val context: Context) {
 
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
-
 
     private val scanCallback = object : ScanCallback() {
         @SuppressLint("MissingPermission")
@@ -140,7 +197,6 @@ class BluetoothSensorManager(private val context: Context) {
         }
         _isScanning.value = false
     }
-
 
     @SuppressLint("MissingPermission")
     suspend fun downloadHistory(deviceAddress: String, records: Int = 70, lastDbTimestamp: Long? = null, onLog: (String) -> Unit = {}): List<SensorData> =
@@ -313,11 +369,13 @@ class BluetoothSensorManager(private val context: Context) {
                         log("Wrote timeCmd (0x23), initiated=$timeOk")
                         if (!timeOk) {
                             writeStep.set(2)
-                            val cmd = byteArrayOf(
-                                0x35.toByte(),
-                                (records and 0xFF).toByte(),
-                                ((records shr 8) and 0xFF).toByte()
-                            )
+                            val cmd = ByteArray(5).apply {
+                                this[0] = 0x35.toByte()
+                                this[1] = (records and 0xFF).toByte()
+                                this[2] = ((records shr 8) and 0xFF).toByte()
+                                this[3] = 0
+                                this[4] = 0
+                            }
                             val histOk = writeCharacteristic(g, char, cmd)
                             log("Fallback: wrote historyCmd (0x35, $records records), initiated=$histOk")
                             if (!histOk) {
@@ -332,11 +390,13 @@ class BluetoothSensorManager(private val context: Context) {
                         if (char == null) return
                         if (writeStep.get() == 1) {
                             writeStep.set(2)
-                            val cmd = byteArrayOf(
-                                0x35.toByte(),
-                                (records and 0xFF).toByte(),
-                                ((records shr 8) and 0xFF).toByte()
-                            )
+                            val cmd = ByteArray(5).apply {
+                                this[0] = 0x35.toByte()
+                                this[1] = (records and 0xFF).toByte()
+                                this[2] = ((records shr 8) and 0xFF).toByte()
+                                this[3] = 0
+                                this[4] = 0
+                            }
                             val histOk = writeCharacteristic(g, char, cmd)
                             log("Wrote historyCmd (0x35, $records records), initiated=$histOk")
                             if (!histOk) {
@@ -407,38 +467,6 @@ class BluetoothSensorManager(private val context: Context) {
             } finally {
                 isGattBusy = false
             }
-        }
-    }
-
-    private fun fixTimestamps(history: List<SensorData>, lastDbTimestamp: Long? = null): List<SensorData> {
-        if (history.isEmpty()) return history
-        val now = System.currentTimeMillis()
-        val sorted = history.sortedBy { it.timestamp }
-        val validEpochRecords = sorted.filter { it.timestamp in 1577836800000L..(now + 300000L) }.map {
-            if (it.timestamp > now) it.copy(timestamp = now) else it
-        }
-        val wrongRecords = sorted.filter { it.timestamp < 1577836800000L }
-
-        // If the sensor has valid real-time epoch records (from after time was synced),
-        // keep ONLY the valid epoch records. Do not shift old pre-sync records onto today.
-        if (validEpochRecords.isNotEmpty()) {
-            return validEpochRecords
-        }
-
-        if (wrongRecords.isEmpty()) return emptyList()
-
-        val sensorEnd = wrongRecords.last().timestamp
-        val sensorStart = wrongRecords.first().timestamp
-        val sensorSpan = sensorEnd - sensorStart
-
-        val windowEnd = now - 60000L
-        val windowStart = windowEnd - sensorSpan
-        val correction = windowStart - sensorStart
-
-        return wrongRecords.map {
-            it.copy(timestamp = it.timestamp + correction)
-        }.filter {
-            it.timestamp <= now
         }
     }
 
