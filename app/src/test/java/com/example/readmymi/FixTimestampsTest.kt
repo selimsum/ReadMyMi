@@ -1,8 +1,13 @@
 package com.example.readmymi
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 class FixTimestampsTest {
 
@@ -110,5 +115,92 @@ class FixTimestampsTest {
         assertEquals(now - 180_000L, result[2].timestamp)
         assertEquals(now - 240_000L, result[1].timestamp)
         assertEquals(now - 300_000L, result[0].timestamp)
+    }
+
+    private fun buildHistoryPacket(
+        index: Short,
+        epochSeconds: Int,
+        tempHundredths: Short,
+        humHundredths: Short,
+        vbatMv: Short
+    ): ByteArray {
+        val buf = ByteBuffer.allocate(13).order(ByteOrder.LITTLE_ENDIAN)
+        buf.put(0x35.toByte())
+        buf.putShort(index)
+        buf.putInt(epochSeconds)
+        buf.putShort(tempHundredths)
+        buf.putShort(humHundredths)
+        buf.putShort(vbatMv)
+        return buf.array()
+    }
+
+    @Test
+    fun testEndOfHistoryMarkerMatchesOnlyShortTerminator() {
+        assertTrue(BluetoothSensorManager.isEndOfHistoryMarker(byteArrayOf(0x35, 0x00, 0x00)))
+        assertFalse(BluetoothSensorManager.isEndOfHistoryMarker(byteArrayOf(0x34, 0x00, 0x00)))
+
+        val indexZeroRecord = buildHistoryPacket(
+            index = 0,
+            epochSeconds = 1794220000,
+            tempHundredths = 2250,
+            humHundredths = 5125,
+            vbatMv = 3000
+        )
+        assertFalse(BluetoothSensorManager.isEndOfHistoryMarker(indexZeroRecord))
+    }
+
+    @Test
+    fun testParseHistoryRecordIndexZeroParsesValidly() {
+        val packet = buildHistoryPacket(
+            index = 0,
+            epochSeconds = 1794220000,
+            tempHundredths = 2250,
+            humHundredths = 5125,
+            vbatMv = 3100
+        )
+        val parsed = BluetoothSensorManager.parseHistoryRecord(packet, "AA:BB:CC:DD:EE:FF", "ATC_Test")
+        assertNotNull(parsed)
+        assertEquals(22.5, parsed!!.temperature, 0.001)
+        assertEquals(51.25, parsed.humidity, 0.001)
+        assertEquals(1794220000_000L, parsed.timestamp)
+        assertEquals(SensorParser.calculateBatteryPercentage(3100), parsed.battery)
+    }
+
+    @Test
+    fun testParseHistoryRecordDummyVsRealTolerance() {
+        val dummyPacket = buildHistoryPacket(
+            index = 1,
+            epochSeconds = 1794220000,
+            tempHundredths = 2112,
+            humHundredths = 4300,
+            vbatMv = 3000
+        )
+        assertNull(BluetoothSensorManager.parseHistoryRecord(dummyPacket, "AA:BB:CC:DD:EE:FF", "ATC_Test"))
+
+        val realClosePacket = buildHistoryPacket(
+            index = 2,
+            epochSeconds = 1794220060,
+            tempHundredths = 2114,
+            humHundredths = 4300,
+            vbatMv = 3000
+        )
+        val parsedReal = BluetoothSensorManager.parseHistoryRecord(realClosePacket, "AA:BB:CC:DD:EE:FF", "ATC_Test")
+        assertNotNull(parsedReal)
+        assertEquals(21.14, parsedReal!!.temperature, 0.001)
+        assertEquals(43.0, parsedReal.humidity, 0.001)
+    }
+
+    @Test
+    fun testParseHistoryRecordUnsignedVbat() {
+        val highVbatPacket = buildHistoryPacket(
+            index = 3,
+            epochSeconds = 1794220120,
+            tempHundredths = 2200,
+            humHundredths = 5000,
+            vbatMv = 40000.toShort()
+        )
+        val parsed = BluetoothSensorManager.parseHistoryRecord(highVbatPacket, "AA:BB:CC:DD:EE:FF", "ATC_Test")
+        assertNotNull(parsed)
+        assertEquals(SensorParser.calculateBatteryPercentage(40000), parsed!!.battery)
     }
 }

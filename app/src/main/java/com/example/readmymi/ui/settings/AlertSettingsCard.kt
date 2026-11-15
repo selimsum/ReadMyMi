@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import com.example.readmymi.PrefsManager
 import com.example.readmymi.ui.AlertThresholdRow
@@ -14,21 +15,25 @@ import com.example.readmymi.ui.SettingsCard
 
 /** Alerts card: master switch + temp/humidity/battery thresholds + vibration. */
 @Composable
-fun AlertSettingsCard(prefs: PrefsManager) {
+fun AlertSettingsCard(
+    prefs: PrefsManager,
+    tempUnit: String = prefs.tempUnit
+) {
+    val context = LocalContext.current
     var alertsEnabled by remember { mutableStateOf(prefs.alertsEnabled) }
     var alertTempHighEnabled by remember { mutableStateOf(prefs.alertTempHighEnabled) }
     var alertTempLowEnabled by remember { mutableStateOf(prefs.alertTempLowEnabled) }
     var alertHumidityHighEnabled by remember { mutableStateOf(prefs.alertHumidityHighEnabled) }
     var alertHumidityLowEnabled by remember { mutableStateOf(prefs.alertHumidityLowEnabled) }
-    var alertTempHigh by remember {
+    var alertTempHigh by remember(tempUnit) {
         mutableStateOf(
-            if (prefs.tempUnit == "C") prefs.alertTempHigh.toString()
+            if (tempUnit == "C") String.format(java.util.Locale.US, "%.1f", prefs.alertTempHigh)
             else String.format(java.util.Locale.US, "%.1f", prefs.alertTempHigh * 1.8f + 32)
         )
     }
-    var alertTempLow by remember {
+    var alertTempLow by remember(tempUnit) {
         mutableStateOf(
-            if (prefs.tempUnit == "C") prefs.alertTempLow.toString()
+            if (tempUnit == "C") String.format(java.util.Locale.US, "%.1f", prefs.alertTempLow)
             else String.format(java.util.Locale.US, "%.1f", prefs.alertTempLow * 1.8f + 32)
         )
     }
@@ -40,7 +45,7 @@ fun AlertSettingsCard(prefs: PrefsManager) {
 
     fun parseTempInputToCelsius(input: String): Float? {
         val parsed = input.toFloatOrNull() ?: return null
-        return if (prefs.tempUnit == "F") (parsed - 32) / 1.8f else parsed
+        return if (tempUnit == "F") (parsed - 32) / 1.8f else parsed
     }
 
     SettingsCard {
@@ -57,10 +62,10 @@ fun AlertSettingsCard(prefs: PrefsManager) {
         )
         if (alertsEnabled) {
             AlertThresholdRow(
-                label = if (prefs.tempUnit == "F") "High Temperature (°F)" else "High Temperature (°C)",
+                label = if (tempUnit == "F") "High Temperature (°F)" else "High Temperature (°C)",
                 enabled = alertTempHighEnabled,
                 value = alertTempHigh,
-                keyboardType = KeyboardType.Number,
+                keyboardType = KeyboardType.Decimal,
                 onEnabledChange = { alertTempHighEnabled = it; prefs.alertTempHighEnabled = it },
                 onValueChange = {
                     alertTempHigh = it
@@ -68,10 +73,10 @@ fun AlertSettingsCard(prefs: PrefsManager) {
                 }
             )
             AlertThresholdRow(
-                label = if (prefs.tempUnit == "F") "Low Temperature (°F)" else "Low Temperature (°C)",
+                label = if (tempUnit == "F") "Low Temperature (°F)" else "Low Temperature (°C)",
                 enabled = alertTempLowEnabled,
                 value = alertTempLow,
-                keyboardType = KeyboardType.Number,
+                keyboardType = KeyboardType.Decimal,
                 onEnabledChange = { alertTempLowEnabled = it; prefs.alertTempLowEnabled = it },
                 onValueChange = {
                     alertTempLow = it
@@ -114,7 +119,11 @@ fun AlertSettingsCard(prefs: PrefsManager) {
             SwitchRow(
                 label = "Enable Vibration",
                 checked = alertVibrationEnabled,
-                onCheckedChange = { alertVibrationEnabled = it; prefs.alertVibrationEnabled = it }
+                onCheckedChange = {
+                    alertVibrationEnabled = it
+                    prefs.alertVibrationEnabled = it
+                    updateServiceNotificationIfRunning(context)
+                }
             )
         }
     }

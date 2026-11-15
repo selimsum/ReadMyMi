@@ -48,7 +48,7 @@ import com.example.readmymi.data.SensorDatabase
 import com.example.readmymi.data.SensorEntity
 import androidx.activity.viewModels
 import android.content.pm.PackageManager
-import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
@@ -81,10 +81,10 @@ fun MainScreen(viewModel: MainViewModel) {
     val lastMac by viewModel.lastMac.collectAsState()
     val isRunning by viewModel.isServiceRunning.collectAsState()
     val sensorData by viewModel.sensorData.collectAsState()
+    val isDownloading by viewModel.isDownloading.collectAsState()
     
     var showSettings by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
-    var isDownloading by remember { mutableStateOf(false) }
     var isOnboardingActive by remember { mutableStateOf(!prefs.hasCompletedOnboarding) }
 
     // BLUETOOTH_SCAN is declared neverForLocation in the manifest, so no location
@@ -118,7 +118,7 @@ fun MainScreen(viewModel: MainViewModel) {
         // Only prompt on launch if onboarding is already completed; first-run
         // onboarding handles permission primers educationally.
         if (prefs.hasCompletedOnboarding) {
-            val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+            val bluetoothAdapter = context.getSystemService(BluetoothManager::class.java)?.adapter
             if (bluetoothAdapter == null) {
                 Toast.makeText(context, "Bluetooth is not supported on this device.", Toast.LENGTH_LONG).show()
             } else if (!bluetoothAdapter.isEnabled) {
@@ -249,13 +249,11 @@ fun MainScreen(viewModel: MainViewModel) {
                     onRefresh = { viewModel.restartService() },
                     onDownloadHistory = { records: Int ->
                         // Rotation-safe: the work runs in the ViewModel scope.
-                        isDownloading = true
                         viewModel.downloadHistory(records) { ok, message ->
                             Toast.makeText(
                                 context, message,
                                 if (ok) Toast.LENGTH_SHORT else Toast.LENGTH_LONG
                             ).show()
-                            isDownloading = false
                         }
                     }
                 )

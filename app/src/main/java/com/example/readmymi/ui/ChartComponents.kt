@@ -84,7 +84,7 @@ fun SensorChart(
                 it.temperature in -40f..80f &&
                 it.humidity in 0f..100f &&
                 !(it.temperature == 0f && it.humidity == 0f) &&
-                !(Math.abs(it.temperature - 21.12f) < 0.05f && Math.abs(it.humidity - 43f) < 1f)
+                !(Math.abs(it.temperature - 21.12f) < 0.005f && Math.abs(it.humidity - 43f) < 0.5f)
             }
 
             val bucketDurationMs = getTimeBucketSize(timeFilter) // Day=10m, Week=1h, Month=4h, 6Mo=24h

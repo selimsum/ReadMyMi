@@ -114,6 +114,42 @@ class BluetoothSensorManager(private val context: Context) {
 
             return combined
         }
+
+        internal fun isEndOfHistoryMarker(value: ByteArray): Boolean =
+            value.size in 3..12 &&
+                value[0] == 0x35.toByte() &&
+                value[1] == 0.toByte() &&
+                value[2] == 0.toByte()
+
+        internal fun parseHistoryRecord(
+            value: ByteArray,
+            macAddress: String,
+            deviceName: String
+        ): SensorData? {
+            if (value.size < 13 || value[0] != 0x35.toByte()) return null
+            val buffer = java.nio.ByteBuffer.wrap(value).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            val time = (buffer.getInt(3).toLong() and 0xFFFFFFFFL) * 1000L
+            val temp = buffer.getShort(7) / 100.0
+            val hum = buffer.getShort(9) / 100.0
+            val vbat = buffer.getShort(11).toInt() and 0xFFFF
+            val batPct = SensorParser.calculateBatteryPercentage(vbat)
+
+            val parsedTemp = Math.round(temp * 100) / 100.0
+            val parsedHum = Math.round(hum * 100) / 100.0
+            val isDummyRecord = Math.abs(parsedTemp - 21.12) < 0.005 && Math.abs(parsedHum - 43.0) < 0.5
+
+            if (temp !in -40.0..80.0 || hum !in 0.0..100.0 || (temp == 0.0 && hum == 0.0) || isDummyRecord) {
+                return null
+            }
+            return SensorData(
+                macAddress = macAddress,
+                deviceName = deviceName,
+                temperature = parsedTemp,
+                humidity = parsedHum,
+                battery = batPct,
+                timestamp = time
+            )
+        }
     }
 
     private val bluetoothManager: BluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -133,10 +169,13 @@ class BluetoothSensorManager(private val context: Context) {
             val device = result.device
             val scanRecord = result.scanRecord ?: return
             
-            val serviceData = scanRecord.serviceData.mapKeys { it.key.uuid.toString() }
+            val rawServiceData = scanRecord.serviceData ?: return
+            if (rawServiceData.isEmpty()) return
+            val serviceData = rawServiceData.mapKeys { it.key.uuid.toString() }
+            val deviceName = device.name ?: scanRecord.deviceName ?: ""
             val details = serviceData.entries.joinToString(" | ") { (k, v) -> "$k:${v.joinToString("") { "%02x".format(it) }}" }
-            AppLogger.log("BLE", "SCAN ${device.name ?: "(unnamed)"} ${device.address} rssi=${result.rssi} data=[$details]")
-            val data = SensorParser.parse(device.name ?: "", device.address, serviceData)
+            AppLogger.log("BLE", "SCAN ${deviceName.ifEmpty { "(unnamed)" }} ${device.address} rssi=${result.rssi} data=[$details]")
+            val data = SensorParser.parse(deviceName, device.address, serviceData)
             
             if (data != null) {
                 // Buffer (drop oldest) instead of conflating: every parsed packet is delivered.
@@ -189,11 +228,13 @@ class BluetoothSensorManager(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     fun stopScanning() {
-        try {
-            scanner?.stopScan(scanCallback)
-            AppLogger.log("BLE", "Scanner STOPPED")
-        } catch (e: Exception) {
-            AppLogger.log("BLE", "Stop Scan Error: ${e.message}")
+        if (_isScanning.value) {
+            try {
+                scanner?.stopScan(scanCallback)
+                AppLogger.log("BLE", "Scanner STOPPED")
+            } catch (e: Exception) {
+                AppLogger.log("BLE", "Stop Scan Error: ${e.message}")
+            }
         }
         _isScanning.value = false
     }
@@ -214,7 +255,7 @@ class BluetoothSensorManager(private val context: Context) {
         gattMutex.withLock {
             isGattBusy = true
             try {
-                val historyList = mutableListOf<SensorData>()
+                val historyList = java.util.Collections.synchronizedList(mutableListOf<SensorData>())
                 val device = bluetoothAdapter?.getRemoteDevice(deviceAddress) ?: return@withLock emptyList()
 
                 var gatt: BluetoothGatt? = null
@@ -229,35 +270,15 @@ class BluetoothSensorManager(private val context: Context) {
                         log("History stream packet #$count received (${value.size} bytes)")
                     }
 
-                    if (value.size >= 3 && value[0] == 0x35.toByte() && value[1] == 0.toByte() && value[2] == 0.toByte()) {
+                    if (isEndOfHistoryMarker(value)) {
                         log("End-of-history marker received. Total records: ${historyList.size}")
                         completion.complete(true)
                         g.disconnect()
                         return
                     }
 
-                    if (value.size >= 13 && value[0] == 0x35.toByte()) {
-                        val buffer = java.nio.ByteBuffer.wrap(value).order(java.nio.ByteOrder.LITTLE_ENDIAN)
-                        val time = (buffer.getInt(3).toLong() and 0xFFFFFFFFL) * 1000L
-                        val temp = buffer.getShort(7) / 100.0
-                        val hum = buffer.getShort(9) / 100.0
-                        val vbat = buffer.getShort(11)
-                        val batPct = SensorParser.calculateBatteryPercentage(vbat.toInt())
-
-                        val parsedTemp = Math.round(temp * 100) / 100.0
-                        val parsedHum = Math.round(hum * 100) / 100.0
-                        val isDummyRecord = (Math.abs(parsedTemp - 21.12) < 0.05 && Math.abs(parsedHum - 43.0) < 0.5)
-
-                        if (temp in -40.0..80.0 && hum in 0.0..100.0 && !(temp == 0.0 && hum == 0.0) && !isDummyRecord) {
-                            historyList.add(SensorData(
-                                macAddress = g.device.address,
-                                deviceName = g.device.name ?: "",
-                                temperature = parsedTemp,
-                                humidity = parsedHum,
-                                battery = batPct,
-                                timestamp = time
-                            ))
-                        }
+                    parseHistoryRecord(value, g.device.address, g.device.name ?: "")?.let {
+                        historyList.add(it)
                     }
                 }
 
@@ -463,7 +484,8 @@ class BluetoothSensorManager(private val context: Context) {
                     throw Exception("Bluetooth connection lost or timed out before history data was received")
                 }
 
-                return@withLock fixTimestamps(historyList, lastDbTimestamp)
+                val snapshot = synchronized(historyList) { historyList.toList() }
+                return@withLock fixTimestamps(snapshot, lastDbTimestamp)
             } finally {
                 isGattBusy = false
             }

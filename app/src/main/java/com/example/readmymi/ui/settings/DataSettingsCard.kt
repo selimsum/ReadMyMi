@@ -102,6 +102,7 @@ fun DataSettingsCard(prefs: PrefsManager) {
                         scope.launch {
                             try {
                                 database.sensorDao().deleteAll()
+                                databaseSize = kotlinx.coroutines.withContext(Dispatchers.IO) { getDatabaseSize(context) }
                                 Toast.makeText(context, "Database cleared successfully", Toast.LENGTH_SHORT).show()
                             } catch (e: SQLiteException) {
                                 Toast.makeText(context, "Database is locked. Please try again later.", Toast.LENGTH_LONG).show()

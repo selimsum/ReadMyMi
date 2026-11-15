@@ -1,5 +1,7 @@
 package com.example.readmymi.ui.settings
 
+import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,6 +20,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.readmymi.AppLogger
+import com.example.readmymi.SensorForegroundService
+
+fun updateServiceNotificationIfRunning(context: Context) {
+    if (SensorForegroundService.isServiceRunning) {
+        try {
+            val intent = Intent(context, SensorForegroundService::class.java).apply {
+                action = "UPDATE_NOTIFICATION"
+            }
+            context.startService(intent)
+        } catch (e: Exception) {
+            AppLogger.log("Settings", "Failed to update notification: ${e.message}")
+        }
+    }
+}
 
 @Composable
 fun SettingsSectionHeader(title: String, icon: ImageVector? = null) {

@@ -78,6 +78,8 @@ class SensorForegroundService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var bluetoothSensorManager: BluetoothSensorManager
+    private var scanLoopJob: kotlinx.coroutines.Job? = null
+    private var collectJob: kotlinx.coroutines.Job? = null
 
 
     private val lastPublishMap = ConcurrentHashMap<String, Long>()
@@ -109,6 +111,12 @@ class SensorForegroundService : Service() {
         if (intent?.action == "STOP_SCAN") {
             isServiceRunning = false
             isServiceRunningFlow.value = false
+            serviceStatus.value = "Stopped"
+            scanLoopJob?.cancel()
+            scanLoopJob = null
+            collectJob?.cancel()
+            collectJob = null
+            bluetoothSensorManager.stopScanning()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 stopForeground(STOP_FOREGROUND_REMOVE)
             } else {
@@ -125,15 +133,23 @@ class SensorForegroundService : Service() {
                 isServiceRunning = true
                 isServiceRunningFlow.value = true
                 startForegroundService()
-                serviceScope.launch {
+                scanLoopJob?.cancel()
+                scanLoopJob = serviceScope.launch {
                     runServiceLoop()
                 }
-                serviceScope.launch {
-                    // collect (not collectLatest): every buffered packet is handled so
-                    // history-sync GATT work is never cancelled by the next advertisement.
-                    bluetoothSensorManager.sensorDataFlow.collect { data ->
-                        handleSensorData(data)
+                if (collectJob?.isActive != true) {
+                    collectJob = serviceScope.launch {
+                        // collect (not collectLatest): every buffered packet is handled so
+                        // history-sync GATT work is never cancelled by the next advertisement.
+                        bluetoothSensorManager.sensorDataFlow.collect { data ->
+                            handleSensorData(data)
+                        }
                     }
+                }
+            } else {
+                scanLoopJob?.cancel()
+                scanLoopJob = serviceScope.launch {
+                    runServiceLoop()
                 }
             }
         } else if (intent?.action == "UPDATE_NOTIFICATION") {
@@ -301,13 +317,13 @@ class SensorForegroundService : Service() {
             // Temperature alerts
             maybeAlert(
                 "temp_high", "High Temperature",
-                "${String.format("%.1f", data.temperature)}°C > ${prefs.alertTempHigh}°C",
+                "${TemperatureConverter.format(data.temperature, prefs.tempUnit)} > ${TemperatureConverter.format(prefs.alertTempHigh.toDouble(), prefs.tempUnit)}",
                 prefs.alertTempHighEnabled && data.temperature > prefs.alertTempHigh
             )
 
             maybeAlert(
                 "temp_low", "Low Temperature",
-                "${String.format("%.1f", data.temperature)}°C < ${prefs.alertTempLow}°C",
+                "${TemperatureConverter.format(data.temperature, prefs.tempUnit)} < ${TemperatureConverter.format(prefs.alertTempLow.toDouble(), prefs.tempUnit)}",
                 prefs.alertTempLowEnabled && data.temperature < prefs.alertTempLow
             )
 
@@ -357,10 +373,12 @@ class SensorForegroundService : Service() {
             acquireWakeLock()
             bluetoothSensorManager.startScanning(prefs.lastMac)
             kotlinx.coroutines.delay(15000)
-            bluetoothSensorManager.stopScanning()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             AppLogger.log("Service", "Scan error: ${e.message}")
         } finally {
+            bluetoothSensorManager.stopScanning()
             releaseWakeLock()
         }
         serviceStatus.value = "Processing & Sleeping..."
@@ -386,6 +404,7 @@ class SensorForegroundService : Service() {
                     prefs.setWasOffline(targetMac, false)
                     AppLogger.log("Service", "Device $targetMac came back online.")
                     historyCheckedMap.remove(targetMac)
+                    prefs.setHistoryChecked(targetMac, false)
                 }
             }
         }
@@ -428,7 +447,7 @@ class SensorForegroundService : Service() {
     private suspend fun runSleepLoop() {
         val sleepStart = System.currentTimeMillis()
         while (isServiceRunning) {
-            val minInterval = prefs.scanIntervalSeconds.coerceAtLeast(30)
+            val minInterval = prefs.scanIntervalSeconds.coerceAtLeast(15)
             val elapsed = System.currentTimeMillis() - sleepStart
             if (elapsed >= minInterval * 1000L) break
             
@@ -439,8 +458,12 @@ class SensorForegroundService : Service() {
     }
 
     private fun handleSensorData(data: SensorData) {
-        liveSensorData.value = data
         discoveredDevices.value = discoveredDevices.value + (data.macAddress to data)
+        val targetMac = prefs.lastMac
+        if (targetMac.isNotEmpty() && data.macAddress != targetMac) {
+            return
+        }
+        liveSensorData.value = data
         latestReadings[data.macAddress] = data
         updateLastPublish(data.macAddress)
         
@@ -449,6 +472,7 @@ class SensorForegroundService : Service() {
             prefs.setWasOffline(data.macAddress, false)
             AppLogger.log("Service", "Device ${data.macAddress} came back online.")
             historyCheckedMap.remove(data.macAddress)
+            prefs.setHistoryChecked(data.macAddress, false)
         }
         
         checkAndDownloadHistory(data.macAddress, data.timestamp, wasOffline)
@@ -482,7 +506,7 @@ class SensorForegroundService : Service() {
                 historyCheckedMap.add(mac)
                 return
             }
-        } else {
+        } else if (mode == "12h" || mode == "24h") {
             val intervalMs = if (mode == "12h") 12 * 3600 * 1000L else 24 * 3600 * 1000L
             val lastSync = prefs.getLastHistorySyncTimestamp(mac)
             if (now - lastSync < intervalMs) {
@@ -507,12 +531,12 @@ class SensorForegroundService : Service() {
             try {
                 acquireWakeLock()
                 lastHistoryAttemptMap[mac] = now
-                bluetoothSensorManager.stopScanning()
 
                 val recentTimestamps = database.sensorDao().getRecentTimestamps(mac, limit = 100)
                 val gapInfo = findGapInTimestamps(recentTimestamps, incomingTimestamp)
 
                 if (gapInfo != null) {
+                    bluetoothSensorManager.stopScanning()
                     val (missingSince, gapDuration) = gapInfo
                     val recordsToDownload = estimateHistoryRecordCount(gapDuration, recentTimestamps.isEmpty())
                     AppLogger.log("Service", "Syncing history ($mode). Downloading up to $recordsToDownload records, missingSince=$missingSince (gap ${gapDuration / 60000}m)...")
@@ -550,6 +574,7 @@ class SensorForegroundService : Service() {
                 AppLogger.log("Service", "History sync failed: ${e.message}")
                 prefs.setWasOffline(mac, false)
                 historyCheckedMap.remove(mac)
+                prefs.setHistoryChecked(mac, false)
             } finally {
                 historySyncInFlight.remove(mac)
                 releaseWakeLock()
@@ -577,12 +602,12 @@ class SensorForegroundService : Service() {
     }
 
     private fun updateLiveNotification(it: SensorData) {
-        val tempStr = String.format(java.util.Locale.getDefault(), "%.1f", it.temperature)
+        val tempStr = TemperatureConverter.format(it.temperature, prefs.tempUnit)
         val humStr = PercentFormatter.format(it.humidity)
         val devName = prefs.getDeviceName(it.macAddress)
         val isHappy = it.temperature in 21.0..26.0 && it.humidity in 30.0..60.0
         val comfortIcon = if (isHappy) "😊" else "🙁"
-        updateNotification(devName, "🌡 ${tempStr}°C   💧 $humStr   $comfortIcon")
+        updateNotification(devName, "🌡 $tempStr   💧 $humStr   $comfortIcon")
     }
 
     private fun updateNotification(title: String, text: String) {
@@ -684,6 +709,10 @@ class SensorForegroundService : Service() {
         super.onDestroy()
         isServiceRunning = false
         isServiceRunningFlow.value = false
+        serviceStatus.value = "Stopped"
+        scanLoopJob?.cancel()
+        collectJob?.cancel()
+        bluetoothSensorManager.stopScanning()
         val manager = getSystemService(NotificationManager::class.java)
         manager.cancel(NOTIFICATION_ID)
         wakeLock?.takeIf { it.isHeld }?.release()

@@ -20,6 +20,9 @@ import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 
 class MainViewModelTest {
 
@@ -34,6 +37,31 @@ class MainViewModelTest {
     fun tearDown() {
         Dispatchers.resetMain()
         SensorDatabase.setTestInstance(null)
+        SensorForegroundService.liveSensorData.value = null
+        SensorForegroundService.discoveredDevices.value = emptyMap()
+    }
+
+    private fun createTestViewModel(initialMac: String = ""): Pair<MainViewModel, SharedPreferences.Editor> {
+        val application = mock<Application>()
+        val context = mock<Context>()
+        val prefs = mock<SharedPreferences>()
+        val editor = mock<SharedPreferences.Editor>()
+
+        whenever(application.applicationContext).thenReturn(context)
+        whenever(context.applicationContext).thenReturn(context)
+        whenever(context.getSharedPreferences(anyString(), anyInt())).thenReturn(prefs)
+        whenever(prefs.getString(anyString(), anyOrNull())).thenReturn(initialMac)
+        whenever(prefs.edit()).thenReturn(editor)
+        whenever(editor.putBoolean(anyString(), anyBoolean())).thenReturn(editor)
+        whenever(editor.putString(anyString(), anyString())).thenReturn(editor)
+
+        val mockDbInstance = mock<SensorDatabase>()
+        val mockDao = mock<SensorDao>()
+        whenever(mockDbInstance.sensorDao()).thenReturn(mockDao)
+        whenever(mockDao.getLatest(anyString())).thenReturn(emptyFlow())
+        SensorDatabase.setTestInstance(mockDbInstance)
+
+        return MainViewModel(application) to editor
     }
 
     @Test
@@ -107,5 +135,46 @@ class MainViewModelTest {
         verify(editor).putString("name_11:22:33:44:55:66", "Living Room")
         verify(editor).putString("last_mac", "11:22:33:44:55:66")
         verify(editor).putBoolean("has_completed_onboarding", true)
+    }
+
+    @Test
+    fun testClearSelectionResetsMacAndServiceFlows() {
+        val sample = SensorData(
+            macAddress = "AA:BB:CC:DD:EE:FF",
+            deviceName = "Bedroom",
+            temperature = 22.5,
+            humidity = 48.0,
+            battery = 95,
+            timestamp = 1794220000000L
+        )
+        SensorForegroundService.liveSensorData.value = sample
+        SensorForegroundService.discoveredDevices.value = mapOf(sample.macAddress to sample)
+
+        val (viewModel, editor) = createTestViewModel(initialMac = sample.macAddress)
+        assertEquals(sample.macAddress, viewModel.lastMac.value)
+
+        viewModel.clearSelection()
+
+        assertEquals("", viewModel.lastMac.value)
+        verify(editor).putString("last_mac", "")
+        assertNull(SensorForegroundService.liveSensorData.value)
+        assertTrue(SensorForegroundService.discoveredDevices.value.isEmpty())
+    }
+
+    @Test
+    fun testDownloadHistoryInitialStateAndNoMacGuard() {
+        val (viewModel, _) = createTestViewModel(initialMac = "")
+        assertFalse(viewModel.isDownloading.value)
+
+        var callbackOk: Boolean? = null
+        var callbackMessage: String? = null
+        viewModel.downloadHistory(100) { ok, message ->
+            callbackOk = ok
+            callbackMessage = message
+        }
+
+        assertEquals(false, callbackOk)
+        assertEquals("No sensor selected yet.", callbackMessage)
+        assertFalse(viewModel.isDownloading.value)
     }
 }

@@ -39,8 +39,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .map { it.values.toList() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val sensorData = combine(liveData, offlineData) { live, offline ->
-        val selected = _lastMac.value
+    private val _isDownloading = MutableStateFlow(false)
+    val isDownloading = _isDownloading.asStateFlow()
+
+    val sensorData = combine(liveData, offlineData, _lastMac) { live, offline, selected ->
         when {
             selected.isEmpty() -> live ?: offline?.toSensorData()
             live != null && live.macAddress == selected -> live
@@ -85,32 +87,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun clearSelection() {
         _lastMac.value = ""
         prefs.lastMac = ""
+        SensorForegroundService.liveSensorData.value = null
+        SensorForegroundService.discoveredDevices.value = emptyMap()
     }
 
     fun startService() {
-        val intent = Intent(context, SensorForegroundService::class.java).apply {
-            action = "START_SCAN"
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent)
-        } else {
-            context.startService(intent)
+        try {
+            val intent = Intent(context, SensorForegroundService::class.java).apply {
+                action = "START_SCAN"
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        } catch (e: Exception) {
+            AppLogger.log("MainViewModel", "Failed to start service: ${e.message}")
         }
     }
 
     fun stopService() {
-        val intent = Intent(context, SensorForegroundService::class.java).apply {
-            action = "STOP_SCAN"
+        try {
+            val intent = Intent(context, SensorForegroundService::class.java).apply {
+                action = "STOP_SCAN"
+            }
+            context.startService(intent)
+        } catch (e: Exception) {
+            AppLogger.log("MainViewModel", "Failed to stop service: ${e.message}")
         }
-        context.startService(intent)
     }
 
     fun restartService() {
-        viewModelScope.launch {
-            stopService()
-            kotlinx.coroutines.delay(3000)
-            startService()
-        }
+        startService()
     }
 
     /**
@@ -119,6 +127,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Bounded by BluetoothSensorManager.DOWNLOAD_TIMEOUT_MS via withTimeout.
      */
     fun downloadHistory(records: Int, onDone: (ok: Boolean, message: String) -> Unit) {
+        if (_isDownloading.value) return
+        _isDownloading.value = true
         viewModelScope.launch {
             try {
                 val mac = _lastMac.value.ifEmpty {
@@ -150,6 +160,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } catch (e: Exception) {
                 onDone(false, "History sync failed: ${e.message}")
+            } finally {
+                _isDownloading.value = false
             }
         }
     }

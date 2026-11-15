@@ -162,7 +162,11 @@ fun SensorMainCard(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "${if (isOnline) "Online" else "Offline"} · Last $lastUpdateTime · Next $nextUpdateTime",
+                    text = if (isServiceRunning) {
+                        "${if (isOnline) "Online" else "Offline"} · Last $lastUpdateTime · Next $nextUpdateTime"
+                    } else {
+                        "Offline · Last $lastUpdateTime · Service stopped"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1
@@ -237,7 +241,7 @@ private fun getNextUpdateTime(serviceStatus: String, lastReadingTimestamp: Long,
     val nextUpdateMillis = if (remainingSeconds != null) {
         System.currentTimeMillis() + remainingSeconds * 1000L
     } else {
-        lastReadingTimestamp + scanIntervalSeconds.coerceAtLeast(30) * 1000L
+        lastReadingTimestamp + scanIntervalSeconds.coerceAtLeast(15) * 1000L
     }
 
     return timeFormatter.format(Instant.ofEpochMilli(nextUpdateMillis))

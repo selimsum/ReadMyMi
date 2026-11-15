@@ -33,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.readmymi.PrefsManager
@@ -50,6 +51,7 @@ fun DeviceCard(
     onClearLastMac: () -> Unit,
     onRunSetupWizard: () -> Unit = onClearLastMac
 ) {
+    val context = LocalContext.current
     var showDeviceNameDialog by remember { mutableStateOf(false) }
     var newDeviceName by remember { mutableStateOf("") }
     val dateFormatter = remember {
@@ -140,6 +142,7 @@ fun DeviceCard(
                     onClick = {
                         if (newDeviceName.isNotBlank()) {
                             prefs.setDeviceName(lastMac, newDeviceName.trim())
+                            updateServiceNotificationIfRunning(context)
                         }
                         showDeviceNameDialog = false
                     }

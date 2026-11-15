@@ -72,21 +72,21 @@ fun OnboardingScreen(
         }
     }
 
-    // Auto-advance logic: Starts when exactly 1 sensor is seen; cancels if 2+ appear or paused
-    LaunchedEffect(discoveredSensors.size, isAutoAdvancePaused) {
-        if (discoveredSensors.size == 1 && !isAutoAdvancePaused) {
+    // Auto-advance logic: Starts when on RADAR stage and exactly 1 sensor is seen; cancels if 2+ appear or paused
+    LaunchedEffect(stage, discoveredSensors.size, isAutoAdvancePaused) {
+        if (stage == OnboardingStage.RADAR && discoveredSensors.size == 1 && !isAutoAdvancePaused) {
             val singleSensor = discoveredSensors.first()
             autoAdvanceRemaining = 3
             while ((autoAdvanceRemaining ?: 0) > 0) {
                 delay(1000)
-                if (discoveredSensors.size > 1 || isAutoAdvancePaused) {
+                if (stage != OnboardingStage.RADAR || discoveredSensors.size > 1 || isAutoAdvancePaused) {
                     autoAdvanceRemaining = null
                     return@LaunchedEffect
                 }
                 autoAdvanceRemaining = (autoAdvanceRemaining ?: 1) - 1
             }
             // Auto-advance triggers
-            if (!isAutoAdvancePaused && discoveredSensors.size == 1) {
+            if (stage == OnboardingStage.RADAR && !isAutoAdvancePaused && discoveredSensors.size == 1) {
                 viewModel.selectDeviceAndCompleteOnboarding(singleSensor.macAddress, singleSensor.deviceName)
                 onComplete()
             }
@@ -138,13 +138,10 @@ fun OnboardingScreen(
                                 selectedSensorForNaming = sensor
                                 customDeviceName = sensor.deviceName.ifBlank { "Living Room" }
                             },
-                            onPauseOrRename = {
+                            onPauseOrRename = { sensor ->
                                 isAutoAdvancePaused = true
-                                val sensor = discoveredSensors.firstOrNull()
-                                if (sensor != null) {
-                                    selectedSensorForNaming = sensor
-                                    customDeviceName = sensor.deviceName.ifBlank { "Living Room" }
-                                }
+                                selectedSensorForNaming = sensor
+                                customDeviceName = sensor.deviceName.ifBlank { "Living Room" }
                             },
                             onOpenTroubleshooting = { showTroubleshootingSheet = true },
                             onRescan = {
@@ -361,7 +358,7 @@ private fun RadarDiscoveryContent(
     autoAdvanceRemaining: Int?,
     tempUnit: String,
     onSelectSensor: (SensorData) -> Unit,
-    onPauseOrRename: () -> Unit,
+    onPauseOrRename: (SensorData) -> Unit,
     onOpenTroubleshooting: () -> Unit,
     onRescan: () -> Unit
 ) {
@@ -404,7 +401,7 @@ private fun RadarDiscoveryContent(
                         protocol = protocol,
                         autoAdvanceSecondsRemaining = if (discoveredSensors.size == 1) autoAdvanceRemaining else null,
                         onSelect = { onSelectSensor(sensor) },
-                        onPauseOrRename = onPauseOrRename,
+                        onPauseOrRename = { onPauseOrRename(sensor) },
                         tempUnit = tempUnit
                     )
                 }

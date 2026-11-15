@@ -2,6 +2,7 @@ package com.example.readmymi.ui.onboarding
 
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -26,6 +27,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.readmymi.ui.theme.successColor
 import com.example.readmymi.ui.theme.dangerColor
 
@@ -37,7 +41,8 @@ fun PermissionPrimerCard(
     val context = LocalContext.current
     var hasAttempted by remember { mutableStateOf(false) }
 
-    val bluetoothAdapter = remember { BluetoothAdapter.getDefaultAdapter() }
+    val bluetoothManager = remember { context.getSystemService(BluetoothManager::class.java) }
+    val bluetoothAdapter = remember { bluetoothManager?.adapter }
     var isBluetoothEnabled by remember {
         mutableStateOf(bluetoothAdapter?.isEnabled == true)
     }
@@ -53,19 +58,21 @@ fun PermissionPrimerCard(
         }
     }
 
+    fun checkBtPermissions(): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
+        ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+
+    fun checkNotificationPermission(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        } else true
+
     var bluetoothGranted by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
-        )
+        mutableStateOf(checkBtPermissions())
     }
 
     var notificationGranted by remember {
-        mutableStateOf(
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-            } else true
-        )
+        mutableStateOf(checkNotificationPermission())
     }
 
     val enableBtLauncher = rememberLauncherForActivityResult(
@@ -85,6 +92,33 @@ fun PermissionPrimerCard(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             notificationGranted = results[Manifest.permission.POST_NOTIFICATIONS] == true ||
                     ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    fun requestEnableBluetooth() {
+        if (!bluetoothGranted) {
+            permissionLauncher.launch(permissions.toTypedArray())
+        } else {
+            try {
+                val intent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                enableBtLauncher.launch(intent)
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                bluetoothGranted = checkBtPermissions()
+                notificationGranted = checkNotificationPermission()
+                isBluetoothEnabled = bluetoothAdapter?.isEnabled == true
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -161,10 +195,7 @@ fun PermissionPrimerCard(
                         )
                     }
                     Button(
-                        onClick = {
-                            val intent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
-                            enableBtLauncher.launch(intent)
-                        },
+                        onClick = { requestEnableBluetooth() },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.error,
                             contentColor = MaterialTheme.colorScheme.onError
@@ -208,10 +239,7 @@ fun PermissionPrimerCard(
             }
         } else if (!isBluetoothEnabled) {
             Button(
-                onClick = {
-                    val intent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
-                    enableBtLauncher.launch(intent)
-                },
+                onClick = { requestEnableBluetooth() },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
